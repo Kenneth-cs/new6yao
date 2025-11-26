@@ -90,7 +90,7 @@ struct CoinTossPageView: View {
             VStack(spacing: 40) {
                 // 问题显示
                 VStack(spacing: 8) {
-                    Text(hasStarted ? "正在为您解答" : "准备开始占卜")
+                    Text(hasStarted ? "正在进行分析" : "准备开始分析")
                         .font(.title2)
                         .foregroundColor(.white)
                     
@@ -219,7 +219,7 @@ struct CoinTossPageView: View {
                     }
                 }
                 
-                // 开始占卜按钮
+                // 开始分析按钮
                 if !hasStarted && !isAnimating {
                     VStack(spacing: 20) {
                         Button(action: {
@@ -227,7 +227,7 @@ struct CoinTossPageView: View {
                         }) {
                             HStack {
                                 Image(systemName: "sparkles")
-                                Text("开始占卜")
+                                Text("开始分析")
                                 Image(systemName: "sparkles")
                             }
                             .font(.title3)
@@ -297,15 +297,15 @@ struct CoinTossPageView: View {
                 
                 Spacer()
                 
-                // 查看卦象解读按钮
+                // 查看分析结果按钮
                 if tossResults.count >= 6 && !isAnimating, let hexagramData = hexagramInfo {
                     VStack(spacing: 16) {
-                        // 主要的解卦按钮
+                        // 主要的结果按钮
                         Button(action: {
-                            print("🔍 [CoinTossPageView] 解卦按钮被点击")
+                            print("🔍 [CoinTossPageView] 结果按钮被点击")
                             print("📝 问题: \(question)")
                             print("🎲 抛掷结果: \(tossResults)")
-                            print("📊 卦象信息: \(hexagramData)")
+                            print("📊 框架信息: \(hexagramData)")
                             
                             // 延迟一点点再触发导航，确保UI更新完成
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -315,7 +315,7 @@ struct CoinTossPageView: View {
                         }) {
                             HStack {
                                 Image(systemName: "eye.fill")
-                                Text("查看卦象解读")
+                                Text("查看分析结果")
                                 Image(systemName: "sparkles")
                             }
                             .font(.title3)
@@ -365,7 +365,7 @@ struct CoinTossPageView: View {
                 }
             }
         }
-        .navigationTitle("摇卦")
+        .navigationTitle("框架分析")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(hasStarted && isAnimating)
         .toolbar {

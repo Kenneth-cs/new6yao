@@ -41,12 +41,12 @@ struct HistoryPageView: View {
                         .font(.system(size: 60))
                         .foregroundColor(.gray)
                     
-                    Text("暂无问卦记录")
+                    Text("暂无分析记录")
                         .font(.title2)
                         .fontWeight(.medium)
                         .foregroundColor(.secondary)
                     
-                    Text("开始您的第一次问卦吧")
+                    Text("开始您的第一次决策分析吧")
                         .font(.body)
                         .foregroundColor(.secondary)
                 }
@@ -66,7 +66,7 @@ struct HistoryPageView: View {
                 }
             }
         }
-        .navigationTitle("问卦历史")
+        .navigationTitle("分析历史")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

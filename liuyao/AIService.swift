@@ -29,7 +29,7 @@ class AIService: ObservableObject {
         )
         
         let requestBody: [String: Any] = [
-            "model": "doubao-seed-1-6-thinking-250715",
+            "model": "deepseek-v3-250324",
             "messages": [
                 [
                     "role": "user",
@@ -92,7 +92,7 @@ class AIService: ObservableObject {
         )
         
         let requestBody: [String: Any] = [
-            "model": "doubao-seed-1-6-thinking-250715",
+            "model": "deepseek-v3-250324",
             "messages": [
                 [
                     "role": "user",
@@ -135,7 +135,7 @@ class AIService: ObservableObject {
     // 添加简化的测试方法
     func testAPIConnection() async throws -> String {
         let testBody: [String: Any] = [
-            "model": "doubao-seed-1-6-thinking-250715",
+            "model": "deepseek-v3-250324",
             "messages": [
                 [
                     "role": "user",
@@ -177,7 +177,7 @@ class AIService: ObservableObject {
         )
         
         let requestBody: [String: Any] = [
-            "model": "doubao-seed-1-6-thinking-250715",
+            "model": "deepseek-v3-250324",
             "messages": [
                 [
                     "role": "user",
@@ -232,29 +232,29 @@ class AIService: ObservableObject {
         let chineseHour = getChineseHour(from: hour)
         
         return """
-        作为一位资深的六爻占卜师，请为以下问题进行详细解读（当前是2025年乙巳年，9月乙酉月）：
+        作为一位专业的决策分析师，请运用六爻框架为以下问题提供决策分析（当前是2025年乙巳年，9月乙酉月）：
         
         问题：\(question)
         
-        卦象信息：
-        - 卦名：\(hexagramName)
-        - 卦象描述：\(hexagramDescription)
-        - 爻位组合：\(hexagramYinYang)
-        - 占卜时间：\(timeString)（\(chineseHour)）
-        - 占卜地点：\(divinationLocation)
+        分析框架信息：
+        - 框架名称：\(hexagramName)
+        - 框架描述：\(hexagramDescription)
+        - 维度组合：\(hexagramYinYang)
+        - 分析时间：\(timeString)（\(chineseHour)）
+        - 分析地点：\(divinationLocation)
         
-        请按以下格式提供解读：
+        请按以下格式提供分析：
         
-        【卦象解析】
-        [结合起卦时间、地点，详细分析卦象的含义和象征]
+        【框架解析】
+        [结合分析时间、地点，详细分析框架的含义和象征]
         
-        【问题解读】
-        [针对具体问题的分析和解答]
+        【问题分析】
+        [针对具体问题的多维度分析和解答]
         
         【建议指导】
-        [给出具体的行动建议和注意事项]
+        [基于分析结果，给出具体的行动建议和注意事项]
         
-        请用专业而通俗易懂的语言进行解读，既要体现六爻占卜的传统智慧，又要贴近现代人的理解方式。
+        请用专业而通俗易懂的语言进行分析。注意：六爻是一套传统的决策分析框架，通过阴阳二元和六个维度来帮助理清思路，而非预测未来。分析应该基于当前形势、个人能力和客观规律，提供理性建议。
         """
     }
     
@@ -297,6 +297,40 @@ class AIService: ObservableObject {
                     "午时", "未时", "申时", "酉时", "戌时", "亥时"]
         let index = (hour + 1) / 2 % 12
         return hours[index]
+    }
+    
+    // MARK: - Simple AI Response (for thinking tools)
+    
+    /// 简单的AI响应方法，用于思维工具等场景
+    func getSimpleAIResponse(prompt: String) async throws -> String {
+        let requestBody: [String: Any] = [
+            "model": "deepseek-v3-250324",
+            "messages": [
+                [
+                    "role": "user",
+                    "content": prompt
+                ]
+            ],
+            "max_tokens": 2000,
+            "temperature": 0.7
+        ]
+        
+        do {
+            let response = try await NetworkService.shared.sendRequest(
+                body: requestBody,
+                responseType: AIResponse.self
+            )
+            
+            if let content = response.choices.first?.message.content {
+                return content
+            } else {
+                throw AIServiceError.noResponse
+            }
+        } catch let error as AIServiceError {
+            throw error
+        } catch {
+            throw AIServiceError.requestFailed(error)
+        }
     }
 }
 

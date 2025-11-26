@@ -13,7 +13,7 @@ struct liuyaoApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()  // 改为新的Tab架构
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
     }

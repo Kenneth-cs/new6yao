@@ -18,14 +18,18 @@ struct AccuracyFeedback {
     let createdAt: Date
 }
 
-// MARK: - 统计服务类
+// MARK: - 统计服务类（单例模式）
 class StatisticsService: ObservableObject {
+    static let shared = StatisticsService()
+    
     @Published var totalDivinations: Int = 0
     @Published var monthlyDivinations: Int = 0
     @Published var averageAccuracy: Double = 0.0
     @Published var consecutiveDays: Int = 0
     @Published var questionTypes: [QuestionTypeData] = []
     @Published var accuracyFeedbacks: [AccuracyFeedback] = []
+    
+    private init() {}
     
     // MARK: - 加载统计数据
     func loadStatistics(context: NSManagedObjectContext) {

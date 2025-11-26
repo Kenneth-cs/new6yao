@@ -13,7 +13,7 @@ struct DivinationResultPageView: View {
     @State private var guidanceAdvice: String = ""
     @State private var isLoading = true
     @State private var showSaveAlert = false
-    @State private var divinationTime: Date = Date() // 静态起卦时间
+    @State private var divinationTime: Date = Date() // 静态分析时间
     @StateObject private var aiService = AIService.shared
     @StateObject private var dataService = DataService()
     @State private var networkMonitor = NWPathMonitor()
@@ -27,7 +27,7 @@ struct DivinationResultPageView: View {
                 VStack(spacing: 20) {
                     // 标题和完成按钮
                     HStack {
-                        Text("解卦结果")
+                        Text("分析结果")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundStyle(
@@ -67,13 +67,13 @@ struct DivinationResultPageView: View {
                             .padding(.horizontal, 20)
                     }
                     
-                    // 起卦信息区域 - 简洁白色背景布局
+                    // 分析信息区域 - 简洁白色背景布局
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Image(systemName: "info.circle.fill")
                                 .foregroundColor(.blue)
                                 .font(.title3)
-                            Text("起卦信息")
+                            Text("分析信息")
                                 .font(.headline)
                                 .fontWeight(.semibold)
                         }
@@ -107,12 +107,12 @@ struct DivinationResultPageView: View {
                                     .multilineTextAlignment(.leading)
                             }
                             
-                            // 起卦时间
+                            // 分析时间
                             HStack {
                                 Image(systemName: "clock.fill")
                                     .foregroundColor(.blue)
                                     .font(.caption)
-                                Text("起卦时间")
+                                Text("分析时间")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 
@@ -123,12 +123,12 @@ struct DivinationResultPageView: View {
                                 Spacer()
                             }
                             
-                            // 起卦地点
+                            // 分析地点
                             HStack {
                                 Image(systemName: "location.fill")
                                     .foregroundColor(.blue)
                                     .font(.caption)
-                                Text("起卦地点")
+                                Text("分析地点")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                                 
@@ -428,13 +428,13 @@ struct DivinationResultPageView: View {
                                     )
                             }
                             
-                             // 重新问卦按钮
+                             // 重新分析按钮
                              Button(action: {
                                  // 通过回调关闭页面，返回首页
-                                 print("[DivinationResultPageView] 点击重新问卦按钮")
+                                 print("[DivinationResultPageView] 点击重新分析按钮")
                                  onDismiss()
                              }) {
-                                Text("重新问卦")
+                                Text("重新分析")
                                     .font(.body)
                                     .fontWeight(.medium)
                                     .foregroundColor(.white)
@@ -457,16 +457,16 @@ struct DivinationResultPageView: View {
                 }
             }
         }
-        .navigationTitle("解卦结果")
+        .navigationTitle("分析结果")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .alert("保存成功", isPresented: $showSaveAlert) {
             Button("确定", role: .cancel) { }
         } message: {
-            Text("解卦结果已保存到历史记录中")
+            Text("分析结果已保存到历史记录中")
         }
         .onAppear {
-            divinationTime = Date() // 设置起卦时间为当前时间
+            divinationTime = Date() // 设置分析时间为当前时间
             // 延迟执行网络相关操作，避免阻塞导航
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 startNetworkMonitoring()

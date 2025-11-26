@@ -6,9 +6,12 @@ struct DivinationPageView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var question = ""
     @State private var divinationStartTime: Date?
+    @State private var showEmptyAlert = false
     let currentTime: Date
     let locationManager: LocationManager
     let defaultQuestion: String?
+    
+    private let maxLength = 500
     
     init(currentTime: Date, locationManager: LocationManager, defaultQuestion: String? = nil) {
         self.currentTime = currentTime
@@ -33,7 +36,7 @@ struct DivinationPageView: View {
             VStack(spacing: 30) {
                 // 标题
                 VStack(spacing: 8) {
-                    Text("心有所问，卦有所答")
+                    Text("理清思路，明智决策")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundStyle(
@@ -44,7 +47,7 @@ struct DivinationPageView: View {
                             )
                         )
                     
-                    Text("请输入你想要咨询的问题")
+                    Text("请输入你想要分析的问题")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -52,18 +55,37 @@ struct DivinationPageView: View {
                 
                 // 问题输入区域
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("你的问题")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                    HStack {
+                        Text("你的问题")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        Spacer()
+                        
+                        Text("\(question.count)/\(maxLength)")
+                            .font(.caption)
+                            .foregroundColor(question.count > maxLength * 9 / 10 ? .red : .secondary)
+                    }
                     
-                    TextField("例如：我和他之间还有未来吗？", text: $question, axis: .vertical)
+                    TextField("例如：是否应该换工作？创业的时机到了吗？", text: $question, axis: .vertical)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .lineLimit(3...6)
                         .font(.body)
+                        .onChange(of: question) { newValue in
+                            if newValue.count > maxLength {
+                                question = String(newValue.prefix(maxLength))
+                            }
+                        }
+                    
+                    if question.isEmpty {
+                        Text("💡 提示：请输入你想要深入分析的决策问题")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
                 }
                 .padding(.horizontal, 20)
                 
-                // 开始摇卦按钮
+                // 开始分析按钮
                 NavigationLink(destination: CoinTossPageView(
                     question: question.isEmpty ? (defaultQuestion ?? "") : question,
                     currentTime: divinationStartTime ?? currentTime,
@@ -71,7 +93,7 @@ struct DivinationPageView: View {
                 )) {
                     HStack {
                         Image(systemName: "sparkles")
-                        Text("开始摇卦")
+                        Text("开始分析")
                         Image(systemName: "sparkles")
                     }
                     .font(.title3)
@@ -104,7 +126,7 @@ struct DivinationPageView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.orange)
                     
-                    Text("问题越具体，解卦越准确\n建议以疑问句的形式提问")
+                    Text("问题越具体，分析越准确\n建议以疑问句的形式提问")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -112,7 +134,7 @@ struct DivinationPageView: View {
                 .padding(.bottom, 30)
             }
         }
-        .navigationTitle("问卦")
+        .navigationTitle("输入问题")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if let defaultQ = defaultQuestion {

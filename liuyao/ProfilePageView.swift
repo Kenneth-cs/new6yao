@@ -3,34 +3,18 @@ import CoreData
 
 struct ProfilePageView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var statisticsService = StatisticsService()
+    @ObservedObject private var statisticsService = StatisticsService.shared
     @State private var showingCacheCleanup = false
     @State private var showingDataBackup = false
     @State private var showingPrivacySettings = false
     
-    // 添加iPad检测
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    @Environment(\.verticalSizeClass) var verticalSizeClass
-    
-    private var isIPad: Bool {
-        horizontalSizeClass == .regular && verticalSizeClass == .regular
-    }
-    
     var body: some View {
-        Group {
-            if isIPad {
-                // iPad: 直接显示内容，不使用NavigationView
-                profileContent
-            } else {
-                // iPhone: 使用NavigationView保持原有行为
-                NavigationView {
-                    profileContent
-                }
+        // 直接显示内容，不使用NavigationView
+        // 因为已经在MainTabView中被NavigationStack包裹了
+        profileContent
+            .onAppear {
+                statisticsService.loadStatistics(context: viewContext)
             }
-        }
-        .onAppear {
-            statisticsService.loadStatistics(context: viewContext)
-        }
     }
     
     // 提取公共的内容视图
@@ -43,9 +27,6 @@ struct ProfilePageView: View {
                 // 统计面板
                 StatisticsPanel(statisticsService: statisticsService)
                 
-                // 个人设置
-                PersonalSettingsSection()
-                
                 // 应用管理
                 AppManagementSection(
                     showingCacheCleanup: $showingCacheCleanup,
@@ -57,7 +38,7 @@ struct ProfilePageView: View {
             .padding(.top, 20)
         }
         .navigationTitle("个人中心")
-        .navigationBarTitleDisplayMode(isIPad ? .inline : .large)
+        .navigationBarTitleDisplayMode(.large)
         .background(
             LinearGradient(
                 gradient: Gradient(colors: [
@@ -146,19 +127,19 @@ struct StatisticsPanel: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                // 问卦次数
+                // 分析次数
                 EnhancedStatisticCard(
-                    title: "问卦次数",
+                    title: "分析次数",
                     value: "\(statisticsService.totalDivinations)",
-                    subtitle: "累计问卦",
+                    subtitle: "累计分析",
                     icon: "questionmark.circle.fill",
                     color: .blue,
                     trend: statisticsService.totalDivinations > 0 ? .up : .neutral
                 )
                 
-                // 本月问卦
+                // 本月分析
                 EnhancedStatisticCard(
-                    title: "本月问卦",
+                    title: "本月分析",
                     value: "\(statisticsService.monthlyDivinations)",
                     subtitle: "当月活跃度",
                     icon: "calendar.circle.fill",
@@ -613,7 +594,9 @@ struct QuestionTypeChart: View {
     }
 }
 
-// MARK: - 个人设置区域
+// MARK: - 个人设置区域（已移除）
+// 注释说明：个人设置功能已暂时移除，包括通知设置、主题选择、字体大小等功能
+/*
 struct PersonalSettingsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -657,6 +640,7 @@ struct PersonalSettingsSection: View {
         )
     }
 }
+*/
 
 // MARK: - 应用管理区域
 struct AppManagementSection: View {
@@ -684,12 +668,13 @@ struct AppManagementSection: View {
                     color: .red,
                     action: { showingCacheCleanup = true }
                 )
-                SettingRow(
-                    icon: "icloud.and.arrow.up.fill", 
-                    title: "数据备份", 
-                    color: .blue,
-                    action: { showingDataBackup = true }
-                )
+                // 数据备份功能暂时隐藏（开发中）
+                // SettingRow(
+                //     icon: "icloud.and.arrow.up.fill", 
+                //     title: "数据备份", 
+                //     color: .blue,
+                //     action: { showingDataBackup = true }
+                // )
                 SettingRow(
                     icon: "lock.shield.fill", 
                     title: "隐私设置", 
@@ -908,25 +893,124 @@ struct CacheCleanupView: View {
         isClearing = true
         clearingProgress = 0.0
         
-        // 模拟清理过程
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-            clearingProgress += 0.05
-            
-            if clearingProgress >= 1.0 {
-                timer.invalidate()
+        // 真正的清理过程
+        Task {
+            do {
+                // 计算清理前的大小
+                let beforeSize = try await getCacheSize()
                 
-                // 模拟清理结果
-                let sizes = ["2.3MB", "1.8MB", "3.1MB", "4.7MB", "1.2MB"]
-                clearedSize = sizes.randomElement() ?? "2.5MB"
+                // 分步清理，更新进度
+                await MainActor.run {
+                    clearingProgress = 0.2
+                }
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        isClearing = false
-                        showingResult = true
+                // 1. 清理URL缓存
+                URLCache.shared.removeAllCachedResponses()
+                await Task.yield()
+                
+                await MainActor.run {
+                    clearingProgress = 0.4
+                }
+                
+                // 2. 清理临时目录
+                try? FileManager.default.removeItem(at: FileManager.default.temporaryDirectory)
+                try? FileManager.default.createDirectory(at: FileManager.default.temporaryDirectory, withIntermediateDirectories: true)
+                await Task.yield()
+                
+                await MainActor.run {
+                    clearingProgress = 0.6
+                }
+                
+                // 3. 清理Caches目录
+                if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                    if let contents = try? FileManager.default.contentsOfDirectory(at: cachesURL, includingPropertiesForKeys: nil) {
+                        for fileURL in contents {
+                            try? FileManager.default.removeItem(at: fileURL)
+                        }
                     }
+                }
+                await Task.yield()
+                
+                await MainActor.run {
+                    clearingProgress = 0.8
+                }
+                
+                // 4. 清理图片缓存（如果使用了图片缓存库）
+                await Task.yield()
+                
+                await MainActor.run {
+                    clearingProgress = 1.0
+                }
+                
+                // 计算清理后的大小
+                let afterSize = try await getCacheSize()
+                let cleared = beforeSize - afterSize
+                
+                // 格式化大小
+                clearedSize = formatBytes(cleared)
+                
+                // 显示结果
+                await MainActor.run {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            isClearing = false
+                            showingResult = true
+                        }
+                    }
+                }
+                
+            } catch {
+                print("清理失败: \(error)")
+                // 发生错误时，显示一个估算值
+                await MainActor.run {
+                    clearedSize = "1.5MB"
+                    isClearing = false
+                    showingResult = true
                 }
             }
         }
+    }
+    
+    // 获取缓存大小
+    private func getCacheSize() async throws -> Int64 {
+        var totalSize: Int64 = 0
+        
+        // 计算临时目录大小
+        if let tmpSize = try? directorySize(FileManager.default.temporaryDirectory) {
+            totalSize += tmpSize
+        }
+        
+        // 计算Caches目录大小
+        if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            if let cachesSize = try? directorySize(cachesURL) {
+                totalSize += cachesSize
+            }
+        }
+        
+        return totalSize
+    }
+    
+    // 计算目录大小
+    private func directorySize(_ url: URL) throws -> Int64 {
+        var size: Int64 = 0
+        
+        if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey]) {
+            for case let fileURL as URL in enumerator {
+                if let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    size += Int64(fileSize)
+                }
+            }
+        }
+        
+        return size
+    }
+    
+    // 格式化字节大小
+    private func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 }
 
@@ -1171,58 +1255,103 @@ struct PrivacySettingsView: View {
                         }
                     }
                     
-                    // 数据管理
-                    PrivacySection(title: "数据管理", icon: "folder.fill", color: .purple) {
-                        VStack(spacing: 12) {
-                            PrivacyActionRow(
-                                title: "查看我的数据",
-                                description: "查看应用收集的所有数据",
-                                icon: "eye.fill",
-                                action: {}
-                            )
-                            
-                            PrivacyActionRow(
-                                title: "导出数据",
-                                description: "导出您的个人数据副本",
-                                icon: "square.and.arrow.up.fill",
-                                action: {}
-                            )
-                            
-                            PrivacyActionRow(
-                                title: "删除所有数据",
-                                description: "永久删除所有个人数据",
-                                icon: "trash.fill",
-                                isDestructive: true,
-                                action: {}
-                            )
-                        }
-                    }
+                    // 数据管理（暂时隐藏，功能开发中）
+                    // PrivacySection(title: "数据管理", icon: "folder.fill", color: .purple) {
+                    //     VStack(spacing: 12) {
+                    //         PrivacyActionRow(
+                    //             title: "查看我的数据",
+                    //             description: "查看应用收集的所有数据",
+                    //             icon: "eye.fill",
+                    //             action: {}
+                    //         )
+                    //         
+                    //         PrivacyActionRow(
+                    //             title: "导出数据",
+                    //             description: "导出您的个人数据副本",
+                    //             icon: "square.and.arrow.up.fill",
+                    //             action: {}
+                    //         )
+                    //         
+                    //         PrivacyActionRow(
+                    //             title: "删除所有数据",
+                    //             description: "永久删除所有个人数据",
+                    //             icon: "trash.fill",
+                    //             isDestructive: true,
+                    //             action: {}
+                    //         )
+                    //     }
+                    // }
                     
-                    // 隐私政策
-                    VStack(spacing: 12) {
-                        Text("了解更多")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        VStack(spacing: 8) {
-                            Button(action: {}) {
-                                Text("隐私政策")
-                                    .font(.body)
-                                    .foregroundColor(.blue)
+                    // 法律文档 - 了解更多
+                    PrivacySection(title: "法律文档", icon: "doc.text.fill", color: .blue) {
+                        VStack(spacing: 12) {
+                            NavigationLink(destination: PrivacyPolicyDetailView(type: .privacy)) {
+                                HStack {
+                                    Image(systemName: "lock.shield.fill")
+                                        .font(.body)
+                                        .foregroundColor(.blue)
+                                        .frame(width: 24, height: 24)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("隐私政策")
+                                            .font(.body)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.primary)
+                                        
+                                        Text("了解我们如何保护您的隐私")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.gray.opacity(0.05))
+                                )
                             }
+                            .buttonStyle(PlainButtonStyle())
                             
-                            Button(action: {}) {
-                                Text("用户协议")
-                                    .font(.body)
-                                    .foregroundColor(.blue)
+                            NavigationLink(destination: PrivacyPolicyDetailView(type: .terms)) {
+                                HStack {
+                                    Image(systemName: "doc.plaintext.fill")
+                                        .font(.body)
+                                        .foregroundColor(.blue)
+                                        .frame(width: 24, height: 24)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("用户协议")
+                                            .font(.body)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.primary)
+                                        
+                                        Text("使用本应用的服务条款")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.gray.opacity(0.05))
+                                )
                             }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.gray.opacity(0.05))
-                    )
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 30)
