@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 5C63E06F2E5C0ADC003E81DE /* Build configuration list for PBXProject "LifeCoach" */;
+			buildConfigurationList = 5C63E06F2E5C0ADC003E81DE /* Build configuration list for PBXProject "人生教练" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -400,8 +400,8 @@
 				DEVELOPMENT_TEAM = 2YDM3D8P4J;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = LifeCoach;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "六爻智卦需要获取您的位置信息，以便根据地理位置提供更准确的卦象解读";
+				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -434,8 +434,8 @@
 				DEVELOPMENT_TEAM = 2YDM3D8P4J;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = LifeCoach;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "六爻智卦需要获取您的位置信息，以便根据地理位置提供更准确的卦象解读";
+				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -531,7 +531,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		5C63E06F2E5C0ADC003E81DE /* Build configuration list for PBXProject "LifeCoach" */ = {
+		5C63E06F2E5C0ADC003E81DE /* Build configuration list for PBXProject "人生教练" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				5C63E0962E5C0ADE003E81DE /* Debug */,
