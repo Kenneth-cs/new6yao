@@ -3,7 +3,7 @@
 //  liuyao
 //
 //  Created by zhangshaocong6 on 2025/11/24.
-//  六爻智卦 2.0 - 主Tab视图
+//  人生教练 - 主Tab视图
 //
 
 import SwiftUI
