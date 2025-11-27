@@ -18,7 +18,7 @@
                BlueprintIdentifier = "5C63E0732E5C0ADC003E81DE"
                BuildableName = "LifeCoach.app"
                BlueprintName = "LifeCoach"
-               ReferencedContainer = "container:LifeCoach.xcodeproj">
+               ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -47,7 +47,7 @@
             BlueprintIdentifier = "5C63E0732E5C0ADC003E81DE"
             BuildableName = "LifeCoach.app"
             BlueprintName = "LifeCoach"
-            ReferencedContainer = "container:LifeCoach.xcodeproj">
+            ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -64,7 +64,7 @@
             BlueprintIdentifier = "5C63E0732E5C0ADC003E81DE"
             BuildableName = "LifeCoach.app"
             BlueprintName = "LifeCoach"
-            ReferencedContainer = "container:LifeCoach.xcodeproj">
+            ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -18,7 +18,7 @@
                BlueprintIdentifier = "5C63E0732E5C0ADC003E81DE"
                BuildableName = "LifeCoach.app"
                BlueprintName = "LifeCoach"
-               ReferencedContainer = "container:LifeCoach.xcodeproj">
+               ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -38,7 +38,7 @@
                BlueprintIdentifier = "5C63E0832E5C0ADE003E81DE"
                BuildableName = "LifeCoachTests.xctest"
                BlueprintName = "LifeCoachTests"
-               ReferencedContainer = "container:LifeCoach.xcodeproj">
+               ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
@@ -49,7 +49,7 @@
                BlueprintIdentifier = "5C63E08D2E5C0ADE003E81DE"
                BuildableName = "LifeCoachUITests.xctest"
                BlueprintName = "LifeCoachUITests"
-               ReferencedContainer = "container:LifeCoach.xcodeproj">
+               ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -71,7 +71,7 @@
             BlueprintIdentifier = "5C63E0732E5C0ADC003E81DE"
             BuildableName = "LifeCoach.app"
             BlueprintName = "LifeCoach"
-            ReferencedContainer = "container:LifeCoach.xcodeproj">
+            ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <EnvironmentVariables>
@@ -95,7 +95,7 @@
             BlueprintIdentifier = "5C63E0732E5C0ADC003E81DE"
             BuildableName = "LifeCoach.app"
             BlueprintName = "LifeCoach"
-            ReferencedContainer = "container:LifeCoach.xcodeproj">
+            ReferencedContainer = "container:&#x4eba;&#x751f;&#x6559;&#x7ec3;.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
