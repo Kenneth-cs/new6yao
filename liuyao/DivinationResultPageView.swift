@@ -24,7 +24,7 @@ struct DivinationResultPageView: View {
         ScrollView {
             VStack(spacing: 0) {
                 // 顶部信息区域
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     // 标题和完成按钮
                     HStack {
                         Text("分析结果")
@@ -143,14 +143,14 @@ struct DivinationResultPageView: View {
                     }
                     
                     // 卦象显示 - 卡片样式居中显示
-                    VStack(spacing: 20) {
+                    VStack(spacing: 16) {
                         Text("卦象")
-                            .font(.title2)
+                            .font(.title3)
                             .fontWeight(.bold)
                             .foregroundColor(.purple)
                         
                         // 爻象显示卡片
-                        VStack(spacing: 12) {
+                        VStack(spacing: 10) {
                             ForEach(Array(tossResults.enumerated().reversed()), id: \.offset) { index, result in
                                 HStack {
                                     if result {
@@ -194,45 +194,46 @@ struct DivinationResultPageView: View {
                                 }
                             }
                         }
-                        .padding(24)
+                        .padding(20)
                         .background(
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(Color.white)
                                 .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
                         )
-                        .frame(maxWidth: 280)
+                        .frame(maxWidth: 260)
                     }
                     .padding(.horizontal, 20)
                 }
                 .background(Color.white)
-                .padding(.bottom, 30)
+                .padding(.bottom, 20)
                 
                 // AI解读内容区域
                 if isLoading {
                     VStack(spacing: 16) {
                         HStack {
                             ProgressView()
-                                .scaleEffect(0.8)
+                                .scaleEffect(1.0)
                                 .tint(.purple)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("AI正在解读卦象...")
-                                    .font(.body)
+                                    .font(.headline)
                                     .foregroundColor(.primary)
                                 
                                 Text("请稍候，正在为您分析卦象含义")
-                                    .font(.caption)
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
+                            Spacer()
                         }
                         
                         // 改进的提示信息
                         VStack(spacing: 8) {
                             Text("💡 解读过程可能需要30-60秒")
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundColor(.orange)
                             
                             Text("网络不佳时会自动重试，请耐心等待")
-                                .font(.caption2)
+                                .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         
@@ -244,8 +245,16 @@ struct DivinationResultPageView: View {
                         .font(.subheadline)
                         .foregroundColor(.orange)
                     }
+                    .padding(20)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white)
+                            .shadow(color: .purple.opacity(0.15), radius: 10, x: 0, y: 4)
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
                     .background(Color(.systemBackground))
                 } else {
                     VStack(spacing: 20) {
