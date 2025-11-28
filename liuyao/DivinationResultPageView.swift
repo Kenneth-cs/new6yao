@@ -659,10 +659,10 @@ struct DivinationResultPageView: View {
         cleanedText = cleanedText.replacingOccurrences(of: "```[\\s\\S]*?```", with: "", options: .regularExpression)
         cleanedText = cleanedText.replacingOccurrences(of: "`([^`]+)`", with: "$1", options: .regularExpression)
         
-        // 7. 移除分隔线
-        cleanedText = cleanedText.replacingOccurrences(of: "^---+$", with: "", options: [.regularExpression, .anchorsMatchLines])
-        cleanedText = cleanedText.replacingOccurrences(of: "^___+$", with: "", options: [.regularExpression, .anchorsMatchLines])
-        cleanedText = cleanedText.replacingOccurrences(of: "^\\*\\*\\*+$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        // 7. 移除分隔线（使用多行模式）
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^---+$", with: "", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^___+$", with: "", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\*\\*\\*+$", with: "", options: .regularExpression)
         
         // 8. 移除方括号【】
         cleanedText = cleanedText.replacingOccurrences(of: "【", with: "")
@@ -671,11 +671,11 @@ struct DivinationResultPageView: View {
         // 9. 处理列表符号
         // - 项目 -> 项目
         // * 项目 -> 项目
-        cleanedText = cleanedText.replacingOccurrences(of: "^[\\-\\*] ", with: "", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\-\\*] ", with: "", options: .regularExpression)
         
         // 10. 处理数字列表，保留数字但美化格式
         // 1. 项目 -> 1. 项目
-        cleanedText = cleanedText.replacingOccurrences(of: "^([0-9]+)\\. ", with: "$1. ", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^([0-9]+)\\. ", with: "$1. ", options: .regularExpression)
         
         // 11. 在中文标点后适当换行
         // 句号后换行
@@ -692,15 +692,15 @@ struct DivinationResultPageView: View {
         // 多个空格变成一个
         cleanedText = cleanedText.replacingOccurrences(of: " {2,}", with: " ", options: .regularExpression)
         // 行首行尾空格
-        cleanedText = cleanedText.replacingOccurrences(of: "^ +", with: "", options: [.regularExpression, .anchorsMatchLines])
-        cleanedText = cleanedText.replacingOccurrences(of: " +$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^ +", with: "", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m) +$", with: "", options: .regularExpression)
         
         // 14. 清理多余的空行
         // 三个以上换行变成两个
         cleanedText = cleanedText.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         
         // 15. 移除孤立的符号行
-        cleanedText = cleanedText.replacingOccurrences(of: "^[\\*\\-_=]+$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=]+$", with: "", options: .regularExpression)
         
         // 16. 清理首尾空白
         cleanedText = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
