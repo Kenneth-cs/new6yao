@@ -239,9 +239,4 @@ extension LocationManager: CLLocationManagerDelegate {
             }
         }
     }
-    
-    // 清理资源
-    deinit {
-        retryTimer?.invalidate()
-    }
 }
