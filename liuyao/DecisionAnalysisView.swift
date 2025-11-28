@@ -45,9 +45,6 @@ struct DecisionAnalysisView: View {
             
             ScrollView {
                 VStack(spacing: isIPad ? 40 : 30) {
-                    // 顶部说明卡片 - 新增
-                    methodologyBanner
-                    
                     // 标题区域
                     headerSection
                     
@@ -86,42 +83,6 @@ struct DecisionAnalysisView: View {
     
     // MARK: - 子视图
     
-    private var methodologyBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "lightbulb.fill")
-                .foregroundColor(.orange)
-                .font(.title3)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("基于六爻框架的AI决策分析")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                
-                Text("这是一套思维工具，不是预测未来")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            Button("了解更多") {
-                showMethodology = true
-            }
-            .font(.caption)
-            .foregroundColor(.purple)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.1))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
-    
     private var headerSection: some View {
         VStack(spacing: isIPad ? 24 : 16) {
             Text("决策分析")
@@ -134,6 +95,11 @@ struct DecisionAnalysisView: View {
                         endPoint: .trailing
                     )
                 )
+            
+            Text("基于六爻框架的AI分析")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .fontWeight(.medium)
             
             // 时间和地点信息
             VStack(spacing: 8) {
