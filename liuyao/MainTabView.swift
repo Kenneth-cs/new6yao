@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var selectedTab = 0  // 默认选中"学习"tab
+    @State private var selectedTab = 2  // 默认选中"决策"tab
     
     var body: some View {
         TabView(selection: $selectedTab) {
