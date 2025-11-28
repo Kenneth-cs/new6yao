@@ -147,6 +147,11 @@ class LocationManager: NSObject, ObservableObject {
             }
         }
     }
+    
+    // 清理资源
+    deinit {
+        retryTimer?.invalidate()
+    }
 }
 
 extension LocationManager: CLLocationManagerDelegate {
