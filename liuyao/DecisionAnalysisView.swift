@@ -44,7 +44,7 @@ struct DecisionAnalysisView: View {
             .ignoresSafeArea()
             
             ScrollView {
-                VStack(spacing: isIPad ? 40 : 30) {
+                VStack(spacing: isIPad ? 40 : 24) {
                     // 标题区域
                     headerSection
                     
@@ -55,11 +55,9 @@ struct DecisionAnalysisView: View {
                     quickScenariosSection
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 20)
+                .padding(.top, 10)
             }
         }
-        .navigationTitle("决策分析")
-        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
