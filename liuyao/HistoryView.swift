@@ -6,8 +6,6 @@ struct HistoryView: View {
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var dataService = DataService()
     @State private var records: [DivinationRecord] = []
-    @State private var selectedRecord: DivinationRecord?
-    @State private var showingDetail = false
     @State private var isLoading = true
     
     var body: some View {
@@ -73,10 +71,10 @@ struct HistoryView: View {
                     ScrollView {
                         LazyVStack(spacing: 16) {
                             ForEach(records, id: \.id) { record in
-                                HistoryRecordCard(record: record) {
-                                    selectedRecord = record
-                                    showingDetail = true
+                                NavigationLink(destination: HistoryDetailView(record: record)) {
+                                    HistoryRecordCardContent(record: record)
                                 }
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                         .padding(.horizontal, 20)
@@ -103,11 +101,6 @@ struct HistoryView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingDetail) {
-            if let record = selectedRecord {
-                HistoryDetailView(record: record)
-            }
-        }
         .onAppear {
             loadRecords()
         }
@@ -129,67 +122,51 @@ struct HistoryView: View {
 }
 
 // MARK: - 历史记录卡片
-struct HistoryRecordCard: View {
+struct HistoryRecordCardContent: View {
     let record: DivinationRecord
-    let onTap: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 主要内容区域
-            Button(action: onTap) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // 问题
-                    HStack {
-                        Image(systemName: "questionmark.circle.fill")
-                            .foregroundColor(.purple)
-                            .font(.title3)
-                        
-                        Text(record.question ?? "未知问题")
-                            .font(.headline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .lineLimit(2)
-                        
-                        Spacer()
-                    }
-                    
-                    // 卦象
-                    HStack {
-                        Image(systemName: "sparkles")
-                            .foregroundColor(.orange)
-                            .font(.caption)
-                        
-                        Text("卦象: \(record.hexagramDisplay)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                        
-                        Text(record.formattedDate)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    // AI解读预览
-                    if let interpretation = record.aiInterpretation, !interpretation.isEmpty {
-                        Text(interpretation)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
-                            .padding(.top, 4)
-                    }
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            // 底部日期显示
+            // 问题
             HStack {
+                Image(systemName: "questionmark.circle.fill")
+                    .foregroundColor(.purple)
+                    .font(.title3)
+                
+                Text(record.question ?? "未知问题")
+                    .font(.headline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                
                 Spacer()
+            }
+            
+            // 卦象
+            HStack {
+                Image(systemName: "sparkles")
+                    .foregroundColor(.orange)
+                    .font(.caption)
+                
+                Text("卦象: \(record.hexagramDisplay)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
                 Text(record.formattedDate)
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 8)
+            
+            // AI解读预览
+            if let interpretation = record.aiInterpretation, !interpretation.isEmpty {
+                Text(interpretation)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .padding(.top, 4)
+            }
         }
         .padding(16)
         .background(
@@ -197,7 +174,6 @@ struct HistoryRecordCard: View {
                 .fill(Color.white)
                 .shadow(color: .purple.opacity(0.1), radius: 8, x: 0, y: 4)
         )
-
     }
 }
 

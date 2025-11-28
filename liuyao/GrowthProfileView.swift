@@ -142,7 +142,10 @@ struct GrowthProfileView: View {
                 EmptyStateView()
             } else {
                 ForEach(records.prefix(3), id: \.objectID) { record in
-                    DecisionRecordCardSimple(record: record)
+                    NavigationLink(destination: HistoryDetailView(record: record)) {
+                        DecisionRecordCardSimple(record: record)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
