@@ -87,7 +87,7 @@ struct CoinTossPageView: View {
                     .position(x: max(position.0, 0), y: max(position.1, 0))
             }
             
-            VStack(spacing: 40) {
+            VStack(spacing: 24) {
                 // 问题显示
                 VStack(spacing: 8) {
                     Text(hasStarted ? "正在进行分析" : "准备开始分析")
@@ -100,10 +100,10 @@ struct CoinTossPageView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
-                .padding(.top, 20)
+                .padding(.top, 10)
                 
                 // 硬币动画区域
-                VStack(spacing: 30) {
+                VStack(spacing: 20) {
                     // 抛掷次数和进度指示器 - 移动到铜钱上方
                     if hasStarted {
                         VStack(spacing: 12) {
@@ -265,12 +265,12 @@ struct CoinTossPageView: View {
                 
                 // 抛掷结果显示
                 if tossResults.count > 0 {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 6) {
                         Text("抛掷结果")
-                            .font(.headline)
+                            .font(.subheadline)
                             .foregroundColor(.white)
                         
-                        HStack(spacing: 12) {
+                        HStack(spacing: 10) {
                             ForEach(0..<tossResults.count, id: \.self) { index in
                                 Text(tossResults[index] ? "阳" : "阴")
                                     .font(.caption)
@@ -296,6 +296,7 @@ struct CoinTossPageView: View {
                 }
                 
                 Spacer()
+                    .frame(maxHeight: 60)
                 
                 // 查看分析结果按钮
                 if tossResults.count >= 6 && !isAnimating, let hexagramData = hexagramInfo {
@@ -342,6 +343,7 @@ struct CoinTossPageView: View {
                                 .opacity(0.8)
                         }
                     }
+                    .padding(.bottom, 40)
                     
                     // 使用fullScreenCover方式，确保完全独立的导航上下文
                     .fullScreenCover(isPresented: $showResultPage) {
