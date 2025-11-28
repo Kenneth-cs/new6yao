@@ -639,14 +639,24 @@ struct DivinationResultPageView: View {
         cleanedText = cleanedText.replacingOccurrences(of: "\r", with: "\n")
         
         // 2. 移除Markdown标题符号（保留标题内容）
+        // #### 标题 -> 标题
         // ### 标题 -> 标题
-        cleanedText = cleanedText.replacingOccurrences(of: "####+ ", with: "", options: .regularExpression)
+        // ## 标题 -> 标题
+        // # 标题 -> 标题
+        cleanedText = cleanedText.replacingOccurrences(of: "#{1,6} ", with: "", options: .regularExpression)
+        // 移除可能没有空格的情况
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^#{1,6}", with: "", options: .regularExpression)
         
-        // 3. 移除粗体符号（保留内容）
+        // 3. 移除粗体和斜体符号（保留内容）
+        // ***文本*** -> 文本
+        cleanedText = cleanedText.replacingOccurrences(of: "\\*{3,}([^*]+)\\*{3,}", with: "$1", options: .regularExpression)
         // **文本** -> 文本
-        cleanedText = cleanedText.replacingOccurrences(of: "\\*\\*\\*([^*]+)\\*\\*\\*", with: "$1", options: .regularExpression)
-        cleanedText = cleanedText.replacingOccurrences(of: "\\*\\*([^*]+)\\*\\*", with: "$1", options: .regularExpression)
-        cleanedText = cleanedText.replacingOccurrences(of: "\\*([^*]+)\\*", with: "$1", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "\\*{2}([^*]+)\\*{2}", with: "$1", options: .regularExpression)
+        // *文本* -> 文本
+        cleanedText = cleanedText.replacingOccurrences(of: "\\*([^*\\n]+)\\*", with: "$1", options: .regularExpression)
+        // 移除孤立的星号
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\*+$", with: "", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\*+ ", with: "", options: .regularExpression)
         
         // 4. 移除下划线符号
         cleanedText = cleanedText.replacingOccurrences(of: "__([^_]+)__", with: "$1", options: .regularExpression)
@@ -664,9 +674,13 @@ struct DivinationResultPageView: View {
         cleanedText = cleanedText.replacingOccurrences(of: "(?m)^___+$", with: "", options: .regularExpression)
         cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\*\\*\\*+$", with: "", options: .regularExpression)
         
-        // 8. 移除方括号【】
+        // 8. 移除方括号【】和特殊括号
         cleanedText = cleanedText.replacingOccurrences(of: "【", with: "")
         cleanedText = cleanedText.replacingOccurrences(of: "】", with: "")
+        cleanedText = cleanedText.replacingOccurrences(of: "『", with: "")
+        cleanedText = cleanedText.replacingOccurrences(of: "』", with: "")
+        cleanedText = cleanedText.replacingOccurrences(of: "「", with: "")
+        cleanedText = cleanedText.replacingOccurrences(of: "」", with: "")
         
         // 9. 处理列表符号
         // - 项目 -> 项目
@@ -699,10 +713,44 @@ struct DivinationResultPageView: View {
         // 三个以上换行变成两个
         cleanedText = cleanedText.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         
-        // 15. 移除孤立的符号行
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=]+$", with: "", options: .regularExpression)
+        // 14.5. 移除只包含符号的行（更彻底）
+        let lines = cleanedText.components(separatedBy: .newlines)
+        cleanedText = lines.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 跳过空行
+            if trimmed.isEmpty { return false }
+            // 跳过只有符号的行
+            if trimmed.range(of: "^[\\s\\*\\-_=#:：、。，！？•·]+$", options: .regularExpression) != nil {
+                return false
+            }
+            // 跳过太短的行（少于2个字符）
+            if trimmed.count < 2 { return false }
+            return true
+        }.joined(separator: "\n")
         
-        // 16. 清理首尾空白
+        // 15. 移除孤立的符号行
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=#+]+$", with: "", options: .regularExpression)
+        
+        // 16. 移除引号符号（中英文）- 使用Unicode转义
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{201C}", with: "")  // "
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{201D}", with: "")  // "
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{2018}", with: "")  // '
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{2019}", with: "")  // '
+        
+        // 17. 移除可能残留的单个星号（不在句子中间的）
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\* ", with: "• ", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: " \\*$", with: "", options: .regularExpression)
+        
+        // 18. 处理可能残留的井号
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^#+ ", with: "", options: .regularExpression)
+        
+        // 19. 清理可能的HTML标签（如果有）
+        cleanedText = cleanedText.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        
+        // 20. 清理连续的标点符号
+        cleanedText = cleanedText.replacingOccurrences(of: "([，。！？]){2,}", with: "$1", options: .regularExpression)
+        
+        // 21. 清理首尾空白
         cleanedText = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         return cleanedText
@@ -811,8 +859,13 @@ struct FormattedDivinationText: View {
             // 跳过空行
             if trimmedLine.isEmpty { continue }
             
-            // 跳过只包含符号的行
-            if trimmedLine.range(of: "^[\\s\\*\\-_=#]+$", options: .regularExpression) != nil {
+            // 跳过只包含符号的行（扩展符号集）
+            if trimmedLine.range(of: "^[\\s\\*\\-_=#:：、。，！？]+$", options: .regularExpression) != nil {
+                continue
+            }
+            
+            // 跳过只包含少量字符的行（可能是残留符号）
+            if trimmedLine.count < 2 {
                 continue
             }
             
@@ -853,11 +906,22 @@ struct FormattedDivinationText: View {
             }
             
             // 移除可能残留的符号
-            cleanLine = cleanLine.replacingOccurrences(of: "^[•·\\-] *", with: "", options: .regularExpression)
+            cleanLine = cleanLine.replacingOccurrences(of: "^[•·\\-\\*] *", with: "", options: .regularExpression)
+            
+            // 移除行首的井号和冒号
+            cleanLine = cleanLine.replacingOccurrences(of: "^[#:]+ *", with: "", options: .regularExpression)
+            
+            // 移除行首行尾的星号
+            cleanLine = cleanLine.replacingOccurrences(of: "^\\*+ *", with: "", options: .regularExpression)
+            cleanLine = cleanLine.replacingOccurrences(of: " *\\*+$", with: "", options: .regularExpression)
+            
+            // 移除方括号
+            cleanLine = cleanLine.replacingOccurrences(of: "[【】『』「」]", with: "", options: .regularExpression)
             
             // 确保行不为空
             cleanLine = cleanLine.trimmingCharacters(in: .whitespacesAndNewlines)
             if cleanLine.isEmpty { continue }
+            if cleanLine.count < 2 { continue }  // 跳过太短的行
             
             segments.append(TextSegment(
                 id: index,

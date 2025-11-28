@@ -288,11 +288,7 @@ struct HistoryDetailView: View {
                                 Spacer()
                             }
                             
-                            Text(interpretation)
-                                .font(.body)
-                                .foregroundColor(.primary)
-                                .lineLimit(nil)
-                                .fixedSize(horizontal: false, vertical: true)
+                            FormattedDivinationText(content: cleanText(interpretation))
                         }
                         .padding(20)
                         .background(
@@ -321,11 +317,7 @@ struct HistoryDetailView: View {
                                 Spacer()
                             }
                             
-                            Text(advice)
-                                .font(.body)
-                                .foregroundColor(.primary)
-                                .lineLimit(nil)
-                                .fixedSize(horizontal: false, vertical: true)
+                            FormattedDivinationText(content: cleanText(advice))
                         }
                         .padding(20)
                         .background(
@@ -365,6 +357,68 @@ struct HistoryDetailView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Helper Functions
+    
+    /// 清理和格式化文本，移除Markdown和特殊符号
+    private func cleanText(_ text: String) -> String {
+        var cleanedText = text
+        
+        // 移除所有Markdown符号和特殊字符
+        let symbolsToRemove = [
+            "#{1,6}",           // 标题符号
+            "\\*{3,}",          // 三个或更多星号
+            "\\*{2}",           // 加粗
+            "\\*",              // 斜体
+            "__",               // 加粗
+            "_",                // 斜体
+            "~~",               // 删除线
+            "`",                // 代码
+            "<[^>]+>",          // HTML标签
+            "\\[([^\\]]+)\\]\\([^)]+\\)"  // Markdown链接
+        ]
+        
+        for symbol in symbolsToRemove {
+            cleanedText = cleanedText.replacingOccurrences(of: symbol, with: "", options: .regularExpression)
+        }
+        
+        // 移除标题标记
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^#+ ", with: "", options: .regularExpression)
+        
+        // 将列表标记转换为项目符号
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\* ", with: "• ", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^- ", with: "• ", options: .regularExpression)
+        
+        // 移除只包含符号的行
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\s\\*\\-_=#:：、。，！？•·]+$", with: "", options: .regularExpression)
+        
+        // 移除行首/行尾空格
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^ +", with: "", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m) +$", with: "", options: .regularExpression)
+        
+        // 移除独立符号行
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=]+$", with: "", options: .regularExpression)
+        
+        // 移除特殊换行符
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=#:：、。，！？•·]+$", with: "", options: .regularExpression)
+        
+        // 移除引号符号（使用Unicode转义）
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{201C}", with: "")  // "
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{201D}", with: "")  // "
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{2018}", with: "")  // '
+        cleanedText = cleanedText.replacingOccurrences(of: "\u{2019}", with: "")  // '
+        
+        // 移除可能残留的单个星号
+        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\* ", with: "• ", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: " \\*$", with: "", options: .regularExpression)
+        
+        // 清理多余空行（连续3个以上换行变成2个）
+        while cleanedText.contains("\n\n\n") {
+            cleanedText = cleanedText.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        }
+        
+        return cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
