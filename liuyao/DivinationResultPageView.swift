@@ -634,38 +634,75 @@ struct DivinationResultPageView: View {
     private func cleanAndFormatText(_ text: String) -> String {
         var cleanedText = text
         
-        // 1. 移除Markdown和特殊格式符号
-        let symbolsToRemove = [
-            "**", "***", "####", "###", "##", "#",
-            "---", "___", "```", "`",
-            "~~", "__", "*",
-            "【", "】"
-        ]
-        for symbol in symbolsToRemove {
-            cleanedText = cleanedText.replacingOccurrences(of: symbol, with: "")
-        }
-        
-        // 2. 处理换行和段落
-        // 先统一换行符
+        // 1. 先统一换行符
         cleanedText = cleanedText.replacingOccurrences(of: "\r\n", with: "\n")
         cleanedText = cleanedText.replacingOccurrences(of: "\r", with: "\n")
         
-        // 在中文句号、问号、感叹号后添加换行
-        cleanedText = cleanedText.replacingOccurrences(of: "。", with: "。\n")
-        cleanedText = cleanedText.replacingOccurrences(of: "！", with: "！\n")
-        cleanedText = cleanedText.replacingOccurrences(of: "？", with: "？\n")
+        // 2. 移除Markdown标题符号（保留标题内容）
+        // ### 标题 -> 标题
+        cleanedText = cleanedText.replacingOccurrences(of: "####+ ", with: "", options: .regularExpression)
         
-        // 在冒号后添加换行（用于要点说明）
-        cleanedText = cleanedText.replacingOccurrences(of: "：", with: "：\n")
+        // 3. 移除粗体符号（保留内容）
+        // **文本** -> 文本
+        cleanedText = cleanedText.replacingOccurrences(of: "\\*\\*\\*([^*]+)\\*\\*\\*", with: "$1", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "\\*\\*([^*]+)\\*\\*", with: "$1", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "\\*([^*]+)\\*", with: "$1", options: .regularExpression)
         
-        // 3. 处理数字序号
-        cleanedText = cleanedText.replacingOccurrences(of: "([0-9]+)\\.", with: "\n$1.", options: .regularExpression)
+        // 4. 移除下划线符号
+        cleanedText = cleanedText.replacingOccurrences(of: "__([^_]+)__", with: "$1", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "_([^_]+)_", with: "$1", options: .regularExpression)
         
-        // 4. 清理多余空格和空行
-        cleanedText = cleanedText.replacingOccurrences(of: " +", with: " ", options: .regularExpression)
-        cleanedText = cleanedText.replacingOccurrences(of: "\n\n+", with: "\n\n", options: .regularExpression)
+        // 5. 移除删除线
+        cleanedText = cleanedText.replacingOccurrences(of: "~~([^~]+)~~", with: "$1", options: .regularExpression)
         
-        // 5. 清理首尾空白
+        // 6. 移除代码块符号
+        cleanedText = cleanedText.replacingOccurrences(of: "```[\\s\\S]*?```", with: "", options: .regularExpression)
+        cleanedText = cleanedText.replacingOccurrences(of: "`([^`]+)`", with: "$1", options: .regularExpression)
+        
+        // 7. 移除分隔线
+        cleanedText = cleanedText.replacingOccurrences(of: "^---+$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: "^___+$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: "^\\*\\*\\*+$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        
+        // 8. 移除方括号【】
+        cleanedText = cleanedText.replacingOccurrences(of: "【", with: "")
+        cleanedText = cleanedText.replacingOccurrences(of: "】", with: "")
+        
+        // 9. 处理列表符号
+        // - 项目 -> 项目
+        // * 项目 -> 项目
+        cleanedText = cleanedText.replacingOccurrences(of: "^[\\-\\*] ", with: "", options: [.regularExpression, .anchorsMatchLines])
+        
+        // 10. 处理数字列表，保留数字但美化格式
+        // 1. 项目 -> 1. 项目
+        cleanedText = cleanedText.replacingOccurrences(of: "^([0-9]+)\\. ", with: "$1. ", options: [.regularExpression, .anchorsMatchLines])
+        
+        // 11. 在中文标点后适当换行
+        // 句号后换行
+        cleanedText = cleanedText.replacingOccurrences(of: "。(?!\\n)", with: "。\n", options: .regularExpression)
+        // 问号后换行（但不在问号已经后面跟换行的情况）
+        cleanedText = cleanedText.replacingOccurrences(of: "？(?!\\n)", with: "？\n", options: .regularExpression)
+        // 感叹号后换行
+        cleanedText = cleanedText.replacingOccurrences(of: "！(?!\\n)", with: "！\n", options: .regularExpression)
+        
+        // 12. 冒号后换行（用于要点说明）
+        cleanedText = cleanedText.replacingOccurrences(of: "：(?!\\n)", with: "：\n", options: .regularExpression)
+        
+        // 13. 清理多余的空格
+        // 多个空格变成一个
+        cleanedText = cleanedText.replacingOccurrences(of: " {2,}", with: " ", options: .regularExpression)
+        // 行首行尾空格
+        cleanedText = cleanedText.replacingOccurrences(of: "^ +", with: "", options: [.regularExpression, .anchorsMatchLines])
+        cleanedText = cleanedText.replacingOccurrences(of: " +$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        
+        // 14. 清理多余的空行
+        // 三个以上换行变成两个
+        cleanedText = cleanedText.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+        
+        // 15. 移除孤立的符号行
+        cleanedText = cleanedText.replacingOccurrences(of: "^[\\*\\-_=]+$", with: "", options: [.regularExpression, .anchorsMatchLines])
+        
+        // 16. 清理首尾空白
         cleanedText = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         return cleanedText
@@ -693,58 +730,73 @@ struct FormattedDivinationText: View {
     let content: String
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(formatTextContent(content), id: \.id) { segment in
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
                     if segment.isBulletPoint {
-                        // 要点样式
+                        // 要点样式 - 圆点标记
                         VStack {
                             Circle()
-                                .fill(Color.blue.opacity(0.6))
-                                .frame(width: 6, height: 6)
-                                .padding(.top, 8)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [.blue.opacity(0.8), .blue.opacity(0.5)]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 7, height: 7)
+                                .padding(.top, 9)
                             Spacer()
                         }
                         
                         Text(segment.text)
                             .font(.body)
                             .foregroundColor(.primary)
-                            .lineSpacing(6)
+                            .lineSpacing(8)
                             .fixedSize(horizontal: false, vertical: true)
                     } else if segment.isImportant {
-                        // 重要信息样式
-                        VStack {
+                        // 重要信息样式 - 高亮背景
+                        HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "star.fill")
                                 .font(.caption)
-                                .foregroundColor(.orange.opacity(0.7))
-                                .padding(.top, 4)
-                            Spacer()
+                                .foregroundColor(.orange)
+                                .padding(.top, 2)
+                            
+                            Text(segment.text)
+                                .font(.body)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                                .lineSpacing(8)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        
-                        Text(segment.text)
-                            .font(.body)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                            .lineSpacing(6)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.orange.opacity(0.1))
-                            )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.orange.opacity(0.12),
+                                            Color.orange.opacity(0.08)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
                     } else {
-                        // 普通文本样式
+                        // 普通文本样式 - 更好的行间距
                         Text(segment.text)
                             .font(.body)
                             .foregroundColor(.primary)
-                            .lineSpacing(6)
+                            .lineSpacing(8)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
         }
     }
@@ -759,48 +811,59 @@ struct FormattedDivinationText: View {
             // 跳过空行
             if trimmedLine.isEmpty { continue }
             
-            // 判断是否是要点（数字开头或包含特定关键词）
-            let isBulletPoint = trimmedLine.hasPrefix("1.") || 
-                               trimmedLine.hasPrefix("2.") || 
-                               trimmedLine.hasPrefix("3.") ||
-                               trimmedLine.hasPrefix("4.") ||
-                               trimmedLine.hasPrefix("5.") ||
-                               trimmedLine.hasPrefix("•") ||
-                               trimmedLine.hasPrefix("-") ||
-                               trimmedLine.hasPrefix("⭐") ||
-                               trimmedLine.contains("比如") ||
-                               trimmedLine.contains("例如") ||
-                               trimmedLine.contains("建议") ||
-                               trimmedLine.contains("避免") ||
-                               trimmedLine.contains("不要") ||
-                               trimmedLine.contains("应该")
-            
-            // 判断是否是重要信息（包含关键词或较短的总结性语句）
-            let isImportant = trimmedLine.contains("核心") ||
-                             trimmedLine.contains("关键") ||
-                             trimmedLine.contains("重要") ||
-                             trimmedLine.contains("注意") ||
-                             trimmedLine.contains("记住") ||
-                             trimmedLine.contains("总结") ||
-                             trimmedLine.contains("最后") ||
-                             trimmedLine.contains("结论") ||
-                             trimmedLine.contains("要点") ||
-                             trimmedLine.contains("提醒") ||
-                             (trimmedLine.count < 40 && !isBulletPoint && trimmedLine.contains("："))
-            
-            // 清理行内容
-            var cleanLine = trimmedLine
-            if isBulletPoint {
-                cleanLine = cleanLine.replacingOccurrences(of: "^[0-9]+\\.", with: "", options: .regularExpression)
-                cleanLine = cleanLine.replacingOccurrences(of: "^[•-]", with: "", options: .regularExpression)
-                cleanLine = cleanLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 跳过只包含符号的行
+            if trimmedLine.range(of: "^[\\s\\*\\-_=#]+$", options: .regularExpression) != nil {
+                continue
             }
+            
+            // 判断是否是数字列表项
+            let isNumberedList = trimmedLine.range(of: "^[0-9]+\\.", options: .regularExpression) != nil
+            
+            // 判断是否是要点（包含特定关键词或短句）
+            let isBulletPoint = isNumberedList ||
+                               trimmedLine.hasPrefix("•") ||
+                               trimmedLine.hasPrefix("·") ||
+                               trimmedLine.hasPrefix("⭐") ||
+                               trimmedLine.hasPrefix("✓") ||
+                               (trimmedLine.contains("：") && trimmedLine.count < 50)
+            
+            // 判断是否是重要信息/标题
+            let isImportant = !isBulletPoint && (
+                               trimmedLine.contains("核心") ||
+                               trimmedLine.contains("关键") ||
+                               trimmedLine.contains("重要") ||
+                               trimmedLine.contains("注意") ||
+                               trimmedLine.contains("记住") ||
+                               trimmedLine.contains("总结") ||
+                               trimmedLine.contains("小结") ||
+                               trimmedLine.contains("结论") ||
+                               trimmedLine.contains("要点") ||
+                               trimmedLine.contains("提醒") ||
+                               trimmedLine.contains("提示") ||
+                               // 短句且包含冒号（可能是小标题）
+                               (trimmedLine.count < 30 && trimmedLine.contains("："))
+            )
+            
+            // 处理行内容
+            var cleanLine = trimmedLine
+            
+            // 如果是数字列表，保留数字
+            if isNumberedList {
+                // 不做额外处理，保持 "1. 内容" 的格式
+            }
+            
+            // 移除可能残留的符号
+            cleanLine = cleanLine.replacingOccurrences(of: "^[•·\\-] *", with: "", options: .regularExpression)
+            
+            // 确保行不为空
+            cleanLine = cleanLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleanLine.isEmpty { continue }
             
             segments.append(TextSegment(
                 id: index,
                 text: cleanLine,
                 isBulletPoint: isBulletPoint,
-                isImportant: isImportant && !isBulletPoint
+                isImportant: isImportant
             ))
         }
         
