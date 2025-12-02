@@ -21,7 +21,7 @@ struct DivinationResultPageView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 0) {
                 // 顶部信息区域
                 VStack(spacing: 16) {
@@ -465,6 +465,7 @@ struct DivinationResultPageView: View {
                     .background(Color(.systemBackground))
                 }
             }
+            .frame(maxWidth: .infinity)
         }
         .navigationTitle("分析结果")
         .navigationBarTitleDisplayMode(.inline)

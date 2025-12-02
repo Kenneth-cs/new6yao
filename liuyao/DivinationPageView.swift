@@ -150,19 +150,6 @@ struct DivinationPageView: View {
                     divinationStartTime = Date()
                 })
                 
-                // 隐藏的NavigationLink，用于编程式导航
-                NavigationLink(
-                    destination: CoinTossPageView(
-                        question: question.isEmpty ? (defaultQuestion ?? "") : question,
-                        currentTime: divinationStartTime ?? currentTime,
-                        locationManager: locationManager
-                    ),
-                    isActive: $navigateToCoinToss
-                ) {
-                    EmptyView()
-                }
-                .hidden()
-                
                 Spacer()
                 
                 // 提示信息
@@ -182,6 +169,13 @@ struct DivinationPageView: View {
         }
         .navigationTitle("输入问题")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $navigateToCoinToss) {
+            CoinTossPageView(
+                question: question.isEmpty ? (defaultQuestion ?? "") : question,
+                currentTime: divinationStartTime ?? currentTime,
+                locationManager: locationManager
+            )
+        }
         .sheet(isPresented: $showSubscriptionPrompt) {
             SubscriptionPromptView(
                 isPresented: $showSubscriptionPrompt,

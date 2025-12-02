@@ -89,7 +89,7 @@ struct SubscriptionManagementView: View {
                 // 到期时间（仅专业版显示）
                 if let status = subscriptionService.subscriptionStatus,
                    status.isActive,
-                   let expirationDate = status.expirationDate {
+                   status.expirationDate != nil {
                     Divider()
                     
                     HStack {
@@ -105,22 +105,6 @@ struct SubscriptionManagementView: View {
                         Text(status.formattedExpirationDate)
                             .font(.subheadline)
                             .fontWeight(.medium)
-                    }
-                    
-                    HStack {
-                        Image(systemName: status.autoRenewing ? "arrow.clockwise.circle.fill" : "xmark.circle")
-                            .foregroundColor(status.autoRenewing ? .green : .orange)
-                        
-                        Text("自动续费")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                        
-                        Text(status.autoRenewing ? "已开启" : "已关闭")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(status.autoRenewing ? .green : .orange)
                     }
                 }
             }

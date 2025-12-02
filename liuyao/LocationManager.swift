@@ -17,20 +17,56 @@ class LocationManager: NSObject, ObservableObject {
     private var retryTimer: Timer?
     private let retryDelay: TimeInterval = 2.0 // 重试间隔2秒
     
+    // 本地缓存
+    private let cachedCityKey = "cached_city_location"
+    private let cachedCityNameKey = "cached_city_name"
+    private let cachedLocationTimeKey = "cached_location_time"
+    private let cacheValidHours: TimeInterval = 24 // 缓存有效期24小时
+    
     override init() {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 1000 // 1公里更新一次
+        
+        // 启动时加载缓存的位置
+        loadCachedLocation()
     }
     
     func requestLocation() {
+        // 检查是否有有效的缓存
+        if hasCachedLocation() {
+            print("📍 使用缓存的位置信息")
+            return
+        }
+        
+        // 没有缓存或缓存过期，开始定位
+        print("📍 缓存无效，开始定位")
+        
         // 取消之前的重试计时器
         retryTimer?.invalidate()
         retryTimer = nil
         
         // 重置重试计数
         retryCount = 0
+        
+        // 开始定位
+        startLocationRequest()
+    }
+    
+    /// 强制刷新定位（忽略缓存）
+    func forceRefreshLocation() {
+        print("📍 强制刷新定位")
+        
+        // 取消之前的重试计时器
+        retryTimer?.invalidate()
+        retryTimer = nil
+        
+        // 重置重试计数
+        retryCount = 0
+        
+        // 清除错误状态
+        locationError = nil
         
         // 开始定位
         startLocationRequest()
@@ -120,19 +156,30 @@ class LocationManager: NSObject, ObservableObject {
                     self.isLocating = false
                     
                     // 优先显示市级行政区
+                    var cityName = ""
                     if let city = placemark.locality {
+                        cityName = city
                         self.currentCity = city
                         print("📍 定位成功: \(city)")
                     } else if let administrativeArea = placemark.administrativeArea {
+                        cityName = administrativeArea
                         self.currentCity = administrativeArea
                         print("📍 定位成功: \(administrativeArea)")
                     } else if let country = placemark.country {
+                        cityName = country
                         self.currentCity = country
                         print("📍 定位成功: \(country)")
                     } else {
+                        cityName = "未知地区"
                         self.currentCity = "未知地区"
                         print("📍 定位成功但地区未知")
                     }
+                    
+                    // 保存到缓存
+                    if !cityName.isEmpty {
+                        self.saveCachedLocation(city: cityName)
+                    }
+                    
                     self.locationError = nil
                     self.retryCount = 0
                 } else {
@@ -146,6 +193,48 @@ class LocationManager: NSObject, ObservableObject {
                 }
             }
         }
+    }
+    
+    // MARK: - 缓存管理
+    
+    /// 检查是否有有效的缓存位置
+    private func hasCachedLocation() -> Bool {
+        guard let cachedTime = UserDefaults.standard.object(forKey: cachedLocationTimeKey) as? Date,
+              let cachedCity = UserDefaults.standard.string(forKey: cachedCityNameKey),
+              !cachedCity.isEmpty else {
+            return false
+        }
+        
+        // 检查缓存是否过期
+        let hoursSinceCached = Date().timeIntervalSince(cachedTime) / 3600
+        return hoursSinceCached < cacheValidHours
+    }
+    
+    /// 加载缓存的位置
+    private func loadCachedLocation() {
+        if let cachedCity = UserDefaults.standard.string(forKey: cachedCityNameKey),
+           !cachedCity.isEmpty,
+           hasCachedLocation() {
+            currentCity = cachedCity
+            locationError = nil
+            print("📍 加载缓存位置: \(cachedCity)")
+        } else {
+            print("📍 无有效缓存，需要定位")
+        }
+    }
+    
+    /// 保存位置到缓存
+    private func saveCachedLocation(city: String) {
+        UserDefaults.standard.set(city, forKey: cachedCityNameKey)
+        UserDefaults.standard.set(Date(), forKey: cachedLocationTimeKey)
+        print("📍 已保存位置缓存: \(city)")
+    }
+    
+    /// 清除位置缓存
+    func clearCachedLocation() {
+        UserDefaults.standard.removeObject(forKey: cachedCityNameKey)
+        UserDefaults.standard.removeObject(forKey: cachedLocationTimeKey)
+        print("📍 已清除位置缓存")
     }
     
     // 清理资源

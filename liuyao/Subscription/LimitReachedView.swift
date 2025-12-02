@@ -14,6 +14,7 @@ struct LimitReachedView: View {
     
     @Environment(\.dismiss) private var dismiss
     @State private var showSubscriptionDetail = false
+    @State private var selectedTier: SubscriptionTier = .proYearly  // 默认选择年付
     
     enum LimitType {
         case dailyDivination
@@ -103,7 +104,7 @@ struct LimitReachedView: View {
         }
         .fullScreenCover(isPresented: $showSubscriptionDetail) {
             NavigationStack {
-                SubscriptionDetailView()
+                SubscriptionDetailView(initialSelectedTier: selectedTier)
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
                             Button("关闭") {
@@ -209,9 +210,6 @@ struct LimitReachedView: View {
                 featureItem("无限次AI决策分析", icon: "sparkles", color: .purple)
                 featureItem("无限使用思维工具", icon: "square.grid.2x2", color: .blue)
                 featureItem("无限保存历史记录", icon: "clock.arrow.circlepath", color: .green)
-                featureItem("深度分析报告", icon: "chart.bar.doc.horizontal", color: .orange)
-                featureItem("导出为PDF/文本", icon: "square.and.arrow.up", color: .pink)
-                featureItem("成长趋势可视化", icon: "chart.line.uptrend.xyaxis", color: .indigo)
             }
         }
         .padding()
@@ -223,69 +221,83 @@ struct LimitReachedView: View {
     
     private var pricingSection: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 24) {
+            HStack(spacing: 16) {
                 // 月付
-                VStack(spacing: 4) {
-                    Text("月付")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("¥9.9")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.purple)
-                        
-                        Text("/月")
+                Button(action: {
+                    selectedTier = .proMonthly
+                }) {
+                    VStack(spacing: 4) {
+                        Text("月付")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text("¥9.9")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(.purple)
+                            
+                            Text("/月")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(selectedTier == .proMonthly ? Color.purple.opacity(0.15) : Color.purple.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(selectedTier == .proMonthly ? Color.purple : Color.clear, lineWidth: 2)
+                    )
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.purple.opacity(0.1))
-                .cornerRadius(12)
+                .buttonStyle(PlainButtonStyle())
                 
                 // 年付（推荐）
-                VStack(spacing: 4) {
-                    HStack {
-                        Text("年付")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                Button(action: {
+                    selectedTier = .proYearly
+                }) {
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text("年付")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Text("推荐")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange)
+                                .cornerRadius(4)
+                        }
                         
-                        Text("推荐")
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text("¥99")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(.purple)
+                            
+                            Text("/年")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text("相当于¥8.25/月")
                             .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange)
-                            .cornerRadius(4)
+                            .foregroundColor(.orange)
                     }
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("¥99")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.purple)
-                        
-                        Text("/年")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Text("相当于¥8.25/月")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(selectedTier == .proYearly ? Color.orange.opacity(0.15) : Color.orange.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(selectedTier == .proYearly ? Color.orange : Color.clear, lineWidth: 2)
+                    )
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange, lineWidth: 2)
-                )
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }

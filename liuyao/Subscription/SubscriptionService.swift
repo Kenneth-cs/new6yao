@@ -69,10 +69,25 @@ class SubscriptionService: ObservableObject {
         isLoadingProducts = true
         loadError = nil
         
+        print("🔄 开始加载订阅产品...")
+        
         do {
             // 从App Store获取产品信息
             let productIDs = SubscriptionConfig.allProductIDs
+            print("   请求产品ID：\(productIDs)")
+            
             let loadedProducts = try await Product.products(for: productIDs)
+            
+            print("   从App Store获取到 \(loadedProducts.count) 个产品")
+            
+            // 检查是否成功加载到产品
+            if loadedProducts.isEmpty {
+                loadError = "订阅产品配置错误，请稍后重试或联系开发者"
+                print("⚠️ 警告：产品ID存在但App Store未返回产品")
+                print("   可能原因：产品未在App Store Connect中配置完成")
+                isLoadingProducts = false
+                return
+            }
             
             // 按价格排序（月付在前，年付在后）
             self.products = loadedProducts.sorted { product1, product2 in
@@ -89,10 +104,26 @@ class SubscriptionService: ObservableObject {
             print("✅ 成功加载 \(self.products.count) 个订阅产品")
             for product in self.products {
                 print("  - \(product.displayName): \(product.displayPrice)")
+                print("    产品ID: \(product.id)")
             }
             
+        } catch let error as NSError {
+            // 检查是否是网络错误
+            if error.domain == NSURLErrorDomain && error.code == -1009 {
+                loadError = "网络连接失败\n请检查网络设置或在系统设置中允许App使用蜂窝数据"
+                print("❌ 加载产品失败：网络错误 (Code: -1009)")
+                print("   原因：网络不可达或蜂窝数据权限被拒绝")
+                print("   解决：1) 连接Wi-Fi 2) 在设置→蜂窝网络→人生教练 中开启数据权限")
+            } else if error.domain == NSURLErrorDomain {
+                loadError = "网络错误，请检查网络连接后重试"
+                print("❌ 加载产品失败：网络错误 (Code: \(error.code))")
+            } else {
+                loadError = "加载失败，请稍后重试\n(\(error.localizedDescription))"
+                print("❌ 加载产品失败：\(error)")
+            }
+            print("   错误详情：\(error)")
         } catch {
-            loadError = "无法加载订阅产品：\(error.localizedDescription)"
+            loadError = "加载失败，请稍后重试"
             print("❌ 加载产品失败：\(error)")
         }
         
@@ -181,10 +212,9 @@ class SubscriptionService: ObservableObject {
     func checkSubscriptionStatus() async {
         print("🔍 检查订阅状态...")
         
-        var activeSubscription: Product.SubscriptionInfo.Status?
-        var activeTier: SubscriptionTier = .free
+        var activeSubscriptions: [(status: Product.SubscriptionInfo.Status, tier: SubscriptionTier)] = []
         
-        // 遍历所有产品，查找有效订阅
+        // 遍历所有产品，查找所有有效订阅
         for product in products {
             guard let subscription = product.subscription else { continue }
             
@@ -192,16 +222,34 @@ class SubscriptionService: ObservableObject {
             
             // 查找当前有效的订阅
             if let status = statuses?.first(where: { $0.state == .subscribed || $0.state == .inGracePeriod }) {
-                activeSubscription = status
-                
                 // 根据产品ID确定订阅层级
+                var tier: SubscriptionTier = .free
                 if product.id == SubscriptionConfig.proMonthlyProductID {
-                    activeTier = .proMonthly
+                    tier = .proMonthly
                 } else if product.id == SubscriptionConfig.proYearlyProductID {
-                    activeTier = .proYearly
+                    tier = .proYearly
                 }
                 
-                break
+                if tier != .free {
+                    activeSubscriptions.append((status: status, tier: tier))
+                    print("📦 找到活跃订阅：\(tier.displayName)")
+                }
+            }
+        }
+        
+        // 如果有多个活跃订阅，选择优先级最高的（年付 > 月付）
+        var activeSubscription: Product.SubscriptionInfo.Status?
+        var activeTier: SubscriptionTier = .free
+        
+        if !activeSubscriptions.isEmpty {
+            // 优先选择年付，其次月付
+            if let yearlySubscription = activeSubscriptions.first(where: { $0.tier == .proYearly }) {
+                activeSubscription = yearlySubscription.status
+                activeTier = .proYearly
+                print("✨ 多个订阅存在，选择年付（优先级最高）")
+            } else if let monthlySubscription = activeSubscriptions.first(where: { $0.tier == .proMonthly }) {
+                activeSubscription = monthlySubscription.status
+                activeTier = .proMonthly
             }
         }
         
@@ -212,11 +260,56 @@ class SubscriptionService: ObservableObject {
                 let renewalInfo = try checkVerified(activeSubscription.renewalInfo)
                 let transaction = try checkVerified(activeSubscription.transaction)
                 
+                // 获取到期时间
+                var expirationDate = transaction.expirationDate ?? renewalInfo.renewalDate
+                
+                // 如果Apple返回的到期时间不合理，根据购买时间和订阅类型手动计算
+                // 这主要处理沙盒环境或数据异常的情况
+                let purchaseDate = transaction.purchaseDate
+                
+                if let appleExpDate = expirationDate {
+                    // 计算预期的到期时间
+                    let calendar = Calendar.current
+                    var expectedExpiration: Date?
+                    
+                    switch activeTier {
+                    case .proMonthly:
+                        // 月付：购买时间 + 1个月
+                        expectedExpiration = calendar.date(byAdding: .month, value: 1, to: purchaseDate)
+                    case .proYearly:
+                        // 年付：购买时间 + 1年
+                        expectedExpiration = calendar.date(byAdding: .year, value: 1, to: purchaseDate)
+                    case .free:
+                        break
+                    }
+                    
+                    // 如果计算出的时间与Apple返回的时间差异很大（超过2天），使用计算的时间
+                    if let expected = expectedExpiration {
+                        let timeDiff = abs(appleExpDate.timeIntervalSince(expected))
+                        if timeDiff > 172800 {  // 2天 = 172800秒
+                            print("⚠️ Apple返回的到期时间(\(appleExpDate))与预期(\(expected))差异较大，使用计算值")
+                            expirationDate = expected
+                        }
+                    }
+                } else {
+                    // 如果Apple没有返回到期时间，根据购买时间计算
+                    let calendar = Calendar.current
+                    switch activeTier {
+                    case .proMonthly:
+                        expirationDate = calendar.date(byAdding: .month, value: 1, to: purchaseDate)
+                    case .proYearly:
+                        expirationDate = calendar.date(byAdding: .year, value: 1, to: purchaseDate)
+                    case .free:
+                        break
+                    }
+                    print("⚠️ Apple未返回到期时间，根据购买时间计算：\(expirationDate?.description ?? "nil")")
+                }
+                
                 // 创建订阅状态
                 let status = SubscriptionStatus(
                     tier: activeTier,
                     isActive: true,
-                    expirationDate: renewalInfo.renewalDate,
+                    expirationDate: expirationDate,
                     autoRenewing: renewalInfo.willAutoRenew,
                     originalPurchaseDate: transaction.originalPurchaseDate
                 )
@@ -225,9 +318,12 @@ class SubscriptionService: ObservableObject {
                 permissionManager.updateSubscriptionStatus(status)
                 
                 print("✅ 订阅状态：\(activeTier.displayName)")
+                print("   购买时间：\(transaction.purchaseDate.description)")
                 if status.expirationDate != nil {
                     print("   到期时间：\(status.formattedExpirationDate)")
-                    print("   自动续费：\(status.autoRenewing ? "是" : "否")")
+                    print("   距离到期：\(status.daysRemaining ?? 0) 天")
+                } else {
+                    print("   到期时间：无限期（测试环境可能）")
                 }
                 
             } catch {

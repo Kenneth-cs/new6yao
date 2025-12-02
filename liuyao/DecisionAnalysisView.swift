@@ -59,6 +59,12 @@ struct DecisionAnalysisView: View {
             }
         }
         .toolbar {
+            // 左上角：定位信息
+            ToolbarItem(placement: .navigationBarLeading) {
+                locationToolbarItem
+            }
+            
+            // 右上角：方法论图标
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     showMethodology = true
@@ -72,10 +78,45 @@ struct DecisionAnalysisView: View {
             MethodologyView()
         }
         .onAppear {
+            // 首次启动或缓存无效时才定位
             locationManager.requestLocation()
         }
         .onReceive(timer) { _ in
             currentTime = Date()
+        }
+    }
+    
+    // MARK: - 子视图
+    
+    // MARK: - 左上角定位信息
+    
+    private var locationToolbarItem: some View {
+        Button(action: {
+            // 点击强制刷新定位
+            locationManager.forceRefreshLocation()
+        }) {
+            HStack(spacing: 4) {
+                // 图标（根据状态显示不同图标）
+                if locationManager.isLocating {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(.purple)
+                } else if locationManager.locationError != nil {
+                    Image(systemName: "location.slash.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                } else {
+                    Image(systemName: "location.fill")
+                        .foregroundColor(.purple)
+                        .font(.caption)
+                }
+                
+                Text(locationManager.currentCity)
+                    .font(.caption)
+                    .foregroundColor(locationManager.locationError != nil ? .orange : .purple)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+            }
         }
     }
     
@@ -99,7 +140,7 @@ struct DecisionAnalysisView: View {
                 .foregroundColor(.secondary)
                 .fontWeight(.medium)
             
-            // 时间和地点信息
+            // 时间信息
             VStack(spacing: 8) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.fill")
@@ -129,60 +170,6 @@ struct DecisionAnalysisView: View {
                             )
                     )
             }
-            
-            // 地点显示
-            Button(action: {
-                if locationManager.locationError != nil && !locationManager.isLocating {
-                    // 如果定位失败且未在定位中，点击重试
-                    locationManager.retryLocation()
-                } else if !locationManager.isLocating {
-                    // 否则刷新定位
-                    locationManager.requestLocation()
-                }
-            }) {
-                HStack(spacing: 6) {
-                    // 图标（根据状态显示不同图标）
-                    if locationManager.isLocating {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(.purple)
-                    } else if locationManager.locationError != nil {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                            .font(.caption)
-                    } else {
-                        Image(systemName: "location.fill")
-                            .foregroundColor(.purple.opacity(0.6))
-                            .font(.caption)
-                    }
-                    
-                    Text(locationManager.currentCity)
-                        .font(.caption)
-                        .foregroundColor(locationManager.locationError != nil ? .orange : .purple.opacity(0.8))
-                        .fontWeight(.medium)
-                    
-                    // 重试提示
-                    if locationManager.locationError != nil && !locationManager.isLocating {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.8))
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    locationManager.locationError != nil ? Color.orange.opacity(0.4) : Color.purple.opacity(0.2),
-                                    lineWidth: 1
-                                )
-                        )
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
             
             Text("多维度分析 · 理性决策")
                 .font(.title3)

@@ -10,6 +10,8 @@ import StoreKit
 
 struct SubscriptionDetailView: View {
     
+    let initialSelectedTier: SubscriptionTier?
+    
     @StateObject private var subscriptionService = SubscriptionService.shared
     @StateObject private var permissionManager = PermissionManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -18,6 +20,10 @@ struct SubscriptionDetailView: View {
     @State private var showingRestoreAlert = false
     @State private var showingErrorAlert = false
     @State private var errorMessage = ""
+    
+    init(initialSelectedTier: SubscriptionTier? = nil) {
+        self.initialSelectedTier = initialSelectedTier
+    }
     
     var body: some View {
         ZStack {
@@ -44,9 +50,37 @@ struct SubscriptionDetailView: View {
                     } else if !subscriptionService.products.isEmpty {
                         subscriptionCardsSection
                     } else {
-                        Text("无法加载订阅产品")
-                            .foregroundColor(.secondary)
-                            .padding()
+                        // 加载失败提示
+                        VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 50))
+                                .foregroundColor(.orange)
+                            
+                            Text(subscriptionService.loadError ?? "无法加载订阅产品")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                            
+                            Button(action: {
+                                Task {
+                                    await subscriptionService.loadProducts()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "arrow.clockwise")
+                                    Text("重试")
+                                }
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 10)
+                                .background(Color.purple)
+                                .cornerRadius(20)
+                            }
+                        }
+                        .padding()
                     }
                     
                     // 功能对比表
@@ -80,9 +114,20 @@ struct SubscriptionDetailView: View {
             Text(errorMessage)
         }
         .onAppear {
-            // 默认选中月订阅
+            // 根据传入的初始选择或默认选中月订阅
             if selectedProduct == nil {
-                selectedProduct = subscriptionService.monthlyProduct
+                if let initialTier = initialSelectedTier {
+                    switch initialTier {
+                    case .proMonthly:
+                        selectedProduct = subscriptionService.monthlyProduct
+                    case .proYearly:
+                        selectedProduct = subscriptionService.yearlyProduct
+                    default:
+                        selectedProduct = subscriptionService.monthlyProduct
+                    }
+                } else {
+                    selectedProduct = subscriptionService.monthlyProduct
+                }
             }
         }
     }

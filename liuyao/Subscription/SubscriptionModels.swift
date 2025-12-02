@@ -85,12 +85,7 @@ enum SubscriptionTier: String, Codable {
                 "SWOT分析：无限次数",
                 "决策矩阵：无限次数",
                 "学习中心：完整访问",
-                "历史记录：无限保存",
-                "深度AI分析（1500字+）",
-                "导出为PDF/文本",
-                "成长趋势可视化",
-                "无广告体验",
-                "优先客服支持"
+                "历史记录：无限保存"
             ]
         }
     }
@@ -240,9 +235,6 @@ enum FeaturePermission {
     case swot              // SWOT分析
     case matrix            // 决策矩阵
     case historyRecords    // 历史记录
-    case deepAnalysis      // 深度分析
-    case export            // 导出功能
-    case trendAnalysis     // 趋势分析
     
     var displayName: String {
         switch self {
@@ -254,12 +246,6 @@ enum FeaturePermission {
             return "决策矩阵"
         case .historyRecords:
             return "历史记录"
-        case .deepAnalysis:
-            return "深度分析"
-        case .export:
-            return "导出功能"
-        case .trendAnalysis:
-            return "趋势分析"
         }
     }
     
@@ -273,12 +259,6 @@ enum FeaturePermission {
             return "tablecells"
         case .historyRecords:
             return "clock.arrow.circlepath"
-        case .deepAnalysis:
-            return "chart.bar.doc.horizontal"
-        case .export:
-            return "square.and.arrow.up"
-        case .trendAnalysis:
-            return "chart.line.uptrend.xyaxis"
         }
     }
     
@@ -292,12 +272,6 @@ enum FeaturePermission {
             return "多维度选项对比工具"
         case .historyRecords:
             return "保存和查看历史分析记录"
-        case .deepAnalysis:
-            return "更详细的AI解读（1500字+）"
-        case .export:
-            return "导出分析结果为PDF或文本"
-        case .trendAnalysis:
-            return "可视化成长轨迹和决策模式"
         }
     }
 }
@@ -308,9 +282,6 @@ enum SubscriptionPromptTrigger {
     case swotLimitReached            // SWOT次数用完
     case matrixLimitReached          // 决策矩阵次数用完
     case historyLimitReached         // 历史记录已满
-    case featureLockedDeepAnalysis   // 尝试使用深度分析
-    case featureLockedExport         // 尝试使用导出功能
-    case featureLockedTrend          // 尝试使用趋势分析
     case manualUpgrade               // 用户主动点击升级
     
     var title: String {
@@ -323,12 +294,6 @@ enum SubscriptionPromptTrigger {
             return "本月决策矩阵次数已用完"
         case .historyLimitReached:
             return "历史记录已达上限"
-        case .featureLockedDeepAnalysis:
-            return "深度分析是专业版功能"
-        case .featureLockedExport:
-            return "导出功能是专业版特权"
-        case .featureLockedTrend:
-            return "趋势分析是专业版特权"
         case .manualUpgrade:
             return "升级专业版，解锁完整功能"
         }
@@ -344,12 +309,6 @@ enum SubscriptionPromptTrigger {
             return "升级专业版，无限使用决策矩阵工具"
         case .historyLimitReached:
             return "升级专业版，无限保存历史记录"
-        case .featureLockedDeepAnalysis:
-            return "获得更详细的AI解读，洞察决策要点"
-        case .featureLockedExport:
-            return "将分析结果导出为PDF或文本，随时分享"
-        case .featureLockedTrend:
-            return "查看成长趋势图，了解决策模式变化"
         case .manualUpgrade:
             return "每天一杯咖啡的价格，换来清晰的人生方向"
         }
@@ -407,36 +366,6 @@ extension FeatureComparisonItem {
             freeDescription: "保留 10 条",
             proDescription: "无限保存",
             icon: "clock.arrow.circlepath"
-        ),
-        FeatureComparisonItem(
-            name: "深度分析",
-            freeDescription: "❌",
-            proDescription: "✅ 1500字+",
-            icon: "chart.bar.doc.horizontal"
-        ),
-        FeatureComparisonItem(
-            name: "导出功能",
-            freeDescription: "❌",
-            proDescription: "✅ PDF/文本",
-            icon: "square.and.arrow.up"
-        ),
-        FeatureComparisonItem(
-            name: "趋势分析",
-            freeDescription: "❌",
-            proDescription: "✅ 可视化图表",
-            icon: "chart.line.uptrend.xyaxis"
-        ),
-        FeatureComparisonItem(
-            name: "广告体验",
-            freeDescription: "❌",
-            proDescription: "✅ 无广告",
-            icon: "nosign"
-        ),
-        FeatureComparisonItem(
-            name: "客服支持",
-            freeDescription: "标准",
-            proDescription: "✅ 优先响应",
-            icon: "headphones"
         )
     ]
 }

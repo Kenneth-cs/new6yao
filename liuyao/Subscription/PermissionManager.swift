@@ -104,21 +104,6 @@ class PermissionManager: ObservableObject {
         return usageStats.totalHistoryRecords < usageQuota.historyRecordsLimit
     }
     
-    /// 是否可以使用深度分析功能
-    func canUseDeepAnalysis() -> Bool {
-        return currentTier.isPro && SubscriptionConfig.FeatureFlags.enableDeepAnalysis
-    }
-    
-    /// 是否可以使用导出功能
-    func canUseExport() -> Bool {
-        return currentTier.isPro && SubscriptionConfig.FeatureFlags.enableExport
-    }
-    
-    /// 是否可以使用趋势分析功能
-    func canUseTrendAnalysis() -> Bool {
-        return currentTier.isPro && SubscriptionConfig.FeatureFlags.enableTrendAnalysis
-    }
-    
     // MARK: - 使用次数增加方法
     
     /// 增加问卦使用次数
@@ -218,9 +203,6 @@ class PermissionManager: ObservableObject {
             let used = usageStats.totalHistoryRecords
             let limit = usageQuota.historyRecordsLimit
             return "已保存 \(used)/\(limit) 条"
-            
-        default:
-            return "专业版功能"
         }
     }
     
@@ -235,8 +217,10 @@ class PermissionManager: ObservableObject {
     
     /// 更新订阅状态
     func updateSubscriptionStatus(_ status: SubscriptionStatus) {
+        print("🔄 更新订阅状态：\(currentTier.displayName) → \(status.tier.displayName)")
         subscriptionStatus = status
         currentTier = status.tier
+        updateQuota(for: status.tier)  // 重要：更新配额以应用新的权限
     }
     
     /// 根据订阅层级更新配额

@@ -126,15 +126,6 @@ struct SubscriptionConfig {
     
     /// 功能特性开关
     struct FeatureFlags {
-        /// 是否启用深度分析功能
-        static let enableDeepAnalysis = true
-        
-        /// 是否启用导出功能
-        static let enableExport = true
-        
-        /// 是否启用趋势分析功能
-        static let enableTrendAnalysis = true
-        
         /// 是否启用推荐奖励系统
         static let enableReferralSystem = false
         

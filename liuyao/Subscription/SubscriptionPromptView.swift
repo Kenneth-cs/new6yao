@@ -96,9 +96,8 @@ struct SubscriptionPromptView: View {
             // 特色功能列表
             VStack(alignment: .leading, spacing: 12) {
                 featureItem("无限次AI决策分析", icon: "sparkles")
-                featureItem("深度思考框架工具", icon: "chart.bar.doc.horizontal")
-                featureItem("成长轨迹可视化", icon: "chart.line.uptrend.xyaxis")
-                featureItem("随时导出分析报告", icon: "square.and.arrow.up")
+                featureItem("无限使用思维工具", icon: "square.grid.2x2")
+                featureItem("无限保存历史记录", icon: "clock.arrow.circlepath")
             }
             .padding(.top, 8)
         }
@@ -166,12 +165,6 @@ struct SubscriptionPromptView: View {
             return "clock.badge.exclamationmark"
         case .historyLimitReached:
             return "folder.badge.plus"
-        case .featureLockedDeepAnalysis:
-            return "chart.bar.doc.horizontal"
-        case .featureLockedExport:
-            return "square.and.arrow.up"
-        case .featureLockedTrend:
-            return "chart.line.uptrend.xyaxis"
         case .manualUpgrade:
             return "crown.fill"
         }
