@@ -10,12 +10,15 @@ import SwiftUI
 
 struct DecisionMatrixView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var permissionManager = PermissionManager.shared
     @State private var problemTitle = ""
     @State private var options: [DecisionOption] = []
     @State private var showAddOption = false
     @State private var showAIAnalysis = false
     @State private var aiAnalysis = ""
     @State private var isLoadingAI = false
+    @State private var showSubscriptionPrompt = false
+    @State private var showLimitReached = false
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -59,6 +62,19 @@ struct DecisionMatrixView: View {
         }
         .navigationTitle("决策矩阵")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showSubscriptionPrompt) {
+            SubscriptionPromptView(
+                isPresented: $showSubscriptionPrompt,
+                trigger: .matrixLimitReached
+            )
+        }
+        .sheet(isPresented: $showLimitReached) {
+            LimitReachedView(
+                limitType: .monthlyMatrix,
+                remaining: permissionManager.getMonthlyMatrixRemaining(),
+                resetTime: Calendar.current.date(byAdding: .month, value: 1, to: Date())
+            )
+        }
         .sheet(isPresented: $showAddOption) {
             AddOptionView(options: $options)
         }
@@ -155,36 +171,67 @@ struct DecisionMatrixView: View {
     }
     
     private var analyzeButton: some View {
-        Button(action: {
-            analyzeWithAI()
-        }) {
-            HStack(spacing: 8) {
-                if isLoadingAI {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    Text("AI正在分析")
-                } else {
-                    Image(systemName: "sparkles")
-                    Text("AI综合分析")
-                    Image(systemName: "sparkles")
+        VStack(spacing: 12) {
+            // 剩余次数提示（仅免费版显示）
+            if !permissionManager.currentTier.isPro {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.green)
+                    Text(permissionManager.getRemainingText(for: .matrix))
+                        .font(.subheadline)
+                        .foregroundColor(.green)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showSubscriptionPrompt = true
+                    }) {
+                        Text("升级")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.purple)
+                            .cornerRadius(12)
+                    }
                 }
+                .padding()
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
             }
-            .font(.headline)
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [.green, .blue]),
-                    startPoint: .leading,
-                    endPoint: .trailing
+            
+            Button(action: {
+                checkPermissionAndAnalyze()
+            }) {
+                HStack(spacing: 8) {
+                    if isLoadingAI {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("AI正在分析")
+                    } else {
+                        Image(systemName: "sparkles")
+                        Text("AI综合分析")
+                        Image(systemName: "sparkles")
+                    }
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.green, .blue]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
-            .cornerRadius(12)
-            .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
+                .cornerRadius(12)
+                .shadow(color: .green.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .disabled(problemTitle.isEmpty || options.count < 2 || isLoadingAI)
+            .opacity((problemTitle.isEmpty || options.count < 2 || isLoadingAI) ? 0.6 : 1.0)
         }
-        .disabled(problemTitle.isEmpty || options.count < 2 || isLoadingAI)
-        .opacity((problemTitle.isEmpty || options.count < 2 || isLoadingAI) ? 0.6 : 1.0)
     }
     
     private var resultSection: some View {
@@ -214,6 +261,18 @@ struct DecisionMatrixView: View {
     }
     
     // MARK: - Methods
+    
+    private func checkPermissionAndAnalyze() {
+        // 检查使用权限
+        if permissionManager.canUseMatrix() {
+            // 有权限，增加计数并开始分析
+            permissionManager.incrementMatrixCount()
+            analyzeWithAI()
+        } else {
+            // 无权限，显示限制提示
+            showLimitReached = true
+        }
+    }
     
     private func analyzeWithAI() {
         isLoadingAI = true

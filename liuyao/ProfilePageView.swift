@@ -24,6 +24,9 @@ struct ProfilePageView: View {
                 // 用户信息区域
                 UserInfoSection()
                 
+                // 订阅状态卡片（新增）
+                SubscriptionStatusCard()
+                
                 // 统计面板
                 StatisticsPanel(statisticsService: statisticsService)
                 
@@ -1477,6 +1480,142 @@ struct PrivacyActionRow: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 订阅状态卡片
+struct SubscriptionStatusCard: View {
+    @StateObject private var subscriptionService = SubscriptionService.shared
+    @StateObject private var permissionManager = PermissionManager.shared
+    
+    var body: some View {
+        NavigationLink(destination: SubscriptionManagementView()) {
+            VStack(spacing: 16) {
+                HStack {
+                    // 左侧图标和信息
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: subscriptionService.isPro ? [Color.yellow, Color.orange] : [Color.gray.opacity(0.6), Color.gray.opacity(0.4)]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 50, height: 50)
+                            
+                            Image(systemName: subscriptionService.isPro ? "crown.fill" : "person.fill")
+                                .font(.title3)
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(subscriptionService.currentTierName)
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+                            
+                            if let status = subscriptionService.subscriptionStatus, status.isActive {
+                                Text(status.statusText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Text("升级解锁完整功能")
+                                    .font(.caption)
+                                    .foregroundColor(.purple)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // 右侧箭头
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                // 底部快速统计（仅免费版显示）
+                if !subscriptionService.isPro {
+                    Divider()
+                    
+                    HStack(spacing: 16) {
+                        UsageQuickStat(
+                            icon: "sparkles",
+                            title: "问卦",
+                            value: "\(permissionManager.getDailyDivinationRemaining())",
+                            subtitle: "今日剩余",
+                            color: .purple
+                        )
+                        
+                        Divider()
+                            .frame(height: 30)
+                        
+                        UsageQuickStat(
+                            icon: "square.grid.2x2",
+                            title: "SWOT",
+                            value: "\(permissionManager.getMonthlySWOTRemaining())",
+                            subtitle: "本月剩余",
+                            color: .blue
+                        )
+                        
+                        Divider()
+                            .frame(height: 30)
+                        
+                        UsageQuickStat(
+                            icon: "tablecells",
+                            title: "矩阵",
+                            value: "\(permissionManager.getMonthlyMatrixRemaining())",
+                            subtitle: "本月剩余",
+                            color: .green
+                        )
+                    }
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(UIColor.systemBackground))
+                    .shadow(color: subscriptionService.isPro ? Color.yellow.opacity(0.3) : Color.gray.opacity(0.1), radius: 10, x: 0, y: 4)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(subscriptionService.isPro ? Color.yellow.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - 使用快速统计
+struct UsageQuickStat: View {
+    let icon: String
+    let title: String
+    let value: String
+    let subtitle: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(color)
+            
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+            
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

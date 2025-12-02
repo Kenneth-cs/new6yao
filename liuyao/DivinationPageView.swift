@@ -4,9 +4,13 @@ import CoreLocation
 
 struct DivinationPageView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var permissionManager = PermissionManager.shared
     @State private var question = ""
     @State private var divinationStartTime: Date?
     @State private var showEmptyAlert = false
+    @State private var showSubscriptionPrompt = false
+    @State private var showLimitReached = false
+    @State private var navigateToCoinToss = false
     let currentTime: Date
     let locationManager: LocationManager
     let defaultQuestion: String?
@@ -85,12 +89,41 @@ struct DivinationPageView: View {
                 }
                 .padding(.horizontal, 20)
                 
+                // 剩余次数提示（仅免费版显示）
+                if !permissionManager.currentTier.isPro {
+                    let remaining = permissionManager.getDailyDivinationRemaining()
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("今日还剩 \(remaining) 次免费分析")
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            showSubscriptionPrompt = true
+                        }) {
+                            Text("升级")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.purple)
+                                .cornerRadius(12)
+                        }
+                    }
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(12)
+                    .padding(.horizontal, 20)
+                }
+                
                 // 开始分析按钮
-                NavigationLink(destination: CoinTossPageView(
-                    question: question.isEmpty ? (defaultQuestion ?? "") : question,
-                    currentTime: divinationStartTime ?? currentTime,
-                    locationManager: locationManager
-                )) {
+                Button(action: {
+                    checkPermissionAndNavigate()
+                }) {
                     HStack {
                         Image(systemName: "sparkles")
                         Text("开始分析")
@@ -117,6 +150,19 @@ struct DivinationPageView: View {
                     divinationStartTime = Date()
                 })
                 
+                // 隐藏的NavigationLink，用于编程式导航
+                NavigationLink(
+                    destination: CoinTossPageView(
+                        question: question.isEmpty ? (defaultQuestion ?? "") : question,
+                        currentTime: divinationStartTime ?? currentTime,
+                        locationManager: locationManager
+                    ),
+                    isActive: $navigateToCoinToss
+                ) {
+                    EmptyView()
+                }
+                .hidden()
+                
                 Spacer()
                 
                 // 提示信息
@@ -136,10 +182,47 @@ struct DivinationPageView: View {
         }
         .navigationTitle("输入问题")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showSubscriptionPrompt) {
+            SubscriptionPromptView(
+                isPresented: $showSubscriptionPrompt,
+                trigger: .dailyLimitReached
+            )
+        }
+        .sheet(isPresented: $showLimitReached) {
+            LimitReachedView(
+                limitType: .dailyDivination,
+                remaining: permissionManager.getDailyDivinationRemaining(),
+                resetTime: Calendar.current.date(byAdding: .day, value: 1, to: Date())
+            )
+        }
+        .alert("请输入问题", isPresented: $showEmptyAlert) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text("请输入你想要分析的问题后再开始")
+        }
         .onAppear {
             if let defaultQ = defaultQuestion {
                 question = defaultQ
             }
+        }
+    }
+    
+    // MARK: - 权限检查与导航
+    
+    private func checkPermissionAndNavigate() {
+        // 检查问题是否为空
+        if question.isEmpty && defaultQuestion == nil {
+            showEmptyAlert = true
+            return
+        }
+        
+        // 检查使用权限
+        if permissionManager.canUseDivination() {
+            // 有权限，增加计数并导航
+            navigateToCoinToss = true
+        } else {
+            // 无权限，显示限制提示
+            showLimitReached = true
         }
     }
 }

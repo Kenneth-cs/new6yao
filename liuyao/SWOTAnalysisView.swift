@@ -10,6 +10,7 @@ import SwiftUI
 
 struct SWOTAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var permissionManager = PermissionManager.shared
     @State private var problemTitle = ""
     @State private var strengths = ""
     @State private var weaknesses = ""
@@ -18,6 +19,8 @@ struct SWOTAnalysisView: View {
     @State private var showResult = false
     @State private var aiAnalysis = ""
     @State private var isLoadingAI = false
+    @State private var showSubscriptionPrompt = false
+    @State private var showLimitReached = false
     
     private let titleMaxLength = 100
     private let fieldMaxLength = 300
@@ -66,6 +69,19 @@ struct SWOTAnalysisView: View {
         }
         .navigationTitle("SWOT分析")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showSubscriptionPrompt) {
+            SubscriptionPromptView(
+                isPresented: $showSubscriptionPrompt,
+                trigger: .swotLimitReached
+            )
+        }
+        .sheet(isPresented: $showLimitReached) {
+            LimitReachedView(
+                limitType: .monthlySWOT,
+                remaining: permissionManager.getMonthlySWOTRemaining(),
+                resetTime: Calendar.current.date(byAdding: .month, value: 1, to: Date())
+            )
+        }
     }
     
     // MARK: - UI Components
@@ -154,36 +170,67 @@ struct SWOTAnalysisView: View {
     }
     
     private var analyzeButton: some View {
-        Button(action: {
-            analyzeWithAI()
-        }) {
-            HStack(spacing: 8) {
-                if isLoadingAI {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    Text("AI正在分析")
-                } else {
-                    Image(systemName: "sparkles")
-                    Text("AI深度分析")
-                    Image(systemName: "sparkles")
+        VStack(spacing: 12) {
+            // 剩余次数提示（仅免费版显示）
+            if !permissionManager.currentTier.isPro {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                    Text(permissionManager.getRemainingText(for: .swot))
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showSubscriptionPrompt = true
+                    }) {
+                        Text("升级")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.purple)
+                            .cornerRadius(12)
+                    }
                 }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
             }
-            .font(.headline)
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [.blue, .purple]),
-                    startPoint: .leading,
-                    endPoint: .trailing
+            
+            Button(action: {
+                checkPermissionAndAnalyze()
+            }) {
+                HStack(spacing: 8) {
+                    if isLoadingAI {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("AI正在分析")
+                    } else {
+                        Image(systemName: "sparkles")
+                        Text("AI深度分析")
+                        Image(systemName: "sparkles")
+                    }
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [.blue, .purple]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
-            .cornerRadius(12)
-            .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                .cornerRadius(12)
+                .shadow(color: .blue.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .disabled(!canAnalyze || isLoadingAI)
+            .opacity((!canAnalyze || isLoadingAI) ? 0.6 : 1.0)
         }
-        .disabled(!canAnalyze || isLoadingAI)
-        .opacity((!canAnalyze || isLoadingAI) ? 0.6 : 1.0)
     }
     
     private var resultSection: some View {
@@ -213,6 +260,18 @@ struct SWOTAnalysisView: View {
     }
     
     // MARK: - Methods
+    
+    private func checkPermissionAndAnalyze() {
+        // 检查使用权限
+        if permissionManager.canUseSWOT() {
+            // 有权限，增加计数并开始分析
+            permissionManager.incrementSWOTCount()
+            analyzeWithAI()
+        } else {
+            // 无权限，显示限制提示
+            showLimitReached = true
+        }
+    }
     
     private func analyzeWithAI() {
         isLoadingAI = true
