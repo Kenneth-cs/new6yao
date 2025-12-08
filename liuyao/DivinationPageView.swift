@@ -40,7 +40,7 @@ struct DivinationPageView: View {
             VStack(spacing: 30) {
                 // 标题
                 VStack(spacing: 8) {
-                    Text("理清思路，明智决策")
+                    Text("心有所问，卦有所答")
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundStyle(
@@ -51,7 +51,7 @@ struct DivinationPageView: View {
                             )
                         )
                     
-                    Text("请输入你想要分析的问题")
+                    Text("请输入你想咨询的问题")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -82,9 +82,15 @@ struct DivinationPageView: View {
                         }
                     
                     if question.isEmpty {
-                        Text("💡 提示：请输入你想要深入分析的决策问题")
-                            .font(.caption)
-                            .foregroundColor(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("💡 提示")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.orange)
+                            Text("问题越具体，解卦越准确\n建议以疑问句的形式提问")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -126,7 +132,7 @@ struct DivinationPageView: View {
                 }) {
                     HStack {
                         Image(systemName: "sparkles")
-                        Text("开始分析")
+                        Text("开始摇卦")
                         Image(systemName: "sparkles")
                     }
                     .font(.title3)
