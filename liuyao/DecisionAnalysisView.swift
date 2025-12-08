@@ -124,7 +124,7 @@ struct DecisionAnalysisView: View {
     
     private var headerSection: some View {
         VStack(spacing: isIPad ? 24 : 16) {
-            Text("决策分析")
+            Text("人生教练")
                 .font(isIPad ? .system(size: 48, weight: .bold) : .largeTitle)
                 .fontWeight(.bold)
                 .foregroundStyle(
@@ -171,7 +171,7 @@ struct DecisionAnalysisView: View {
                     )
             }
             
-            Text("多维度分析 · 理性决策")
+            Text("看见自己、理解当下、顺势而为")
                 .font(.title3)
                 .foregroundColor(.secondary)
                 .fontWeight(.medium)
@@ -225,7 +225,7 @@ struct DecisionAnalysisView: View {
                         }
                     }
                     
-                    Text("开始深度分析")
+                    Text("遇事不决 摇一摇")
                         .font(isIPad ? .title : .title2)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)
