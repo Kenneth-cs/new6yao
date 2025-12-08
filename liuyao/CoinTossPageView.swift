@@ -91,7 +91,7 @@ struct CoinTossPageView: View {
             VStack(spacing: 24) {
                 // 问题显示
                 VStack(spacing: 8) {
-                    Text(hasStarted ? "正在进行分析" : "准备开始分析")
+                    Text(hasStarted ? "正在起卦" : "准备开始起卦")
                         .font(.title2)
                         .foregroundColor(.white)
                     
@@ -228,7 +228,7 @@ struct CoinTossPageView: View {
                         }) {
                             HStack {
                                 Image(systemName: "sparkles")
-                                Text("开始分析")
+                                Text("开始起卦")
                                 Image(systemName: "sparkles")
                             }
                             .font(.title3)
@@ -320,7 +320,7 @@ struct CoinTossPageView: View {
                         }) {
                             HStack {
                                 Image(systemName: "eye.fill")
-                                Text("查看分析结果")
+                                Text("卦象解读")
                                 Image(systemName: "sparkles")
                             }
                             .font(.title3)
@@ -371,7 +371,7 @@ struct CoinTossPageView: View {
                 }
             }
         }
-        .navigationTitle("框架分析")
+        .navigationTitle("开始起卦")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(hasStarted && isAnimating)
         .toolbar {
