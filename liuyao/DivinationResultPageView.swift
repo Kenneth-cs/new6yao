@@ -197,8 +197,8 @@ struct DivinationResultPageView: View {
                         .padding(20)
                         .background(
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.white)
-                                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+                                .fill(Color(.secondarySystemBackground))
+                                .shadow(color: Color.primary.opacity(0.08), radius: 8, x: 0, y: 2)
                         )
                         .frame(maxWidth: 260)
                     }
@@ -249,8 +249,8 @@ struct DivinationResultPageView: View {
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white)
-                            .shadow(color: .purple.opacity(0.15), radius: 10, x: 0, y: 4)
+                            .fill(Color(.secondarySystemBackground))
+                            .shadow(color: Color.primary.opacity(0.15), radius: 10, x: 0, y: 4)
                     )
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
