@@ -916,3 +916,8 @@ App 订阅功能：
 
 有任何问题随时告诉我。
 
+
+
+沙盒测试账号：
+testuser1.lifecoach@gmail.com  
+Test1234!

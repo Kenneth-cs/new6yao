@@ -47,7 +47,7 @@ struct ProfilePageView: View {
                 gradient: Gradient(colors: [
                     Color.purple.opacity(0.05),
                     Color.indigo.opacity(0.03),
-                    Color.white
+                    Color(.systemBackground)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

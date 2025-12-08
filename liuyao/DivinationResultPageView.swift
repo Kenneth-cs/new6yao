@@ -204,7 +204,7 @@ struct DivinationResultPageView: View {
                     }
                     .padding(.horizontal, 20)
                 }
-                .background(Color.white)
+                .background(Color(.systemBackground))
                 .padding(.bottom, 20)
                 
                 // AI解读内容区域

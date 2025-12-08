@@ -31,12 +31,12 @@ struct DecisionAnalysisView: View {
     
     var body: some View {
         ZStack {
-            // 背景渐变
+            // 背景渐变（支持深色模式）
             LinearGradient(
                 gradient: Gradient(colors: [
                     Color.purple.opacity(0.15),
                     Color.indigo.opacity(0.1),
-                    Color.white
+                    Color(.systemBackground)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -238,7 +238,7 @@ struct DecisionAnalysisView: View {
                 .padding(.horizontal, isIPad ? 60 : 40)
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white)
+                        .fill(Color(.secondarySystemBackground))
                         .shadow(color: .purple.opacity(0.2), radius: 15, x: 0, y: 8)
                         .overlay(
                             RoundedRectangle(cornerRadius: 20)

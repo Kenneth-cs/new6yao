@@ -118,7 +118,7 @@ struct FormattedTextView: View {
                             .padding(.vertical, 8)
                             .padding(.horizontal, 4)
                             .frame(maxWidth: .infinity)
-                            .background(rowIndex % 2 == 0 ? Color.gray.opacity(0.05) : Color.white)
+                            .background(rowIndex % 2 == 0 ? Color.gray.opacity(0.05) : Color(.systemBackground))
                             .overlay(
                                 Rectangle()
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
