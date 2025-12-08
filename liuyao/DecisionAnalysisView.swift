@@ -259,7 +259,7 @@ struct DecisionAnalysisView: View {
     
     private var quickScenariosSection: some View {
         VStack(spacing: 12) {
-            Text("常见决策场景")
+            Text("问一问")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
