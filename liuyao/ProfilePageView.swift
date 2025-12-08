@@ -102,8 +102,8 @@ struct UserInfoSection: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: .purple.opacity(0.1), radius: 8, x: 0, y: 4)
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: Color.primary.opacity(0.1), radius: 8, x: 0, y: 4)
         )
     }
 }
@@ -186,8 +186,8 @@ struct StatisticsPanel: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: .blue.opacity(0.1), radius: 8, x: 0, y: 4)
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: Color.primary.opacity(0.1), radius: 8, x: 0, y: 4)
         )
     }
 }
@@ -689,8 +689,8 @@ struct AppManagementSection: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: .green.opacity(0.1), radius: 8, x: 0, y: 4)
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: Color.primary.opacity(0.1), radius: 8, x: 0, y: 4)
         )
         .padding(.bottom, 30)
     }
