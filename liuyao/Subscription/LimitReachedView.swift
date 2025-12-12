@@ -57,7 +57,7 @@ struct LimitReachedView: View {
             case .monthlyMatrix:
                 return "免费版用户每月可以使用10次决策矩阵"
             case .historyRecords:
-                return "免费版用户最多保留10条历史记录"
+                return "免费版用户最多保留3条历史记录"
             }
         }
     }

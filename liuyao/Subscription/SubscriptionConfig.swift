@@ -36,7 +36,7 @@ struct SubscriptionConfig {
     static let freeMonthlyMatrix = 10
     
     /// 免费版：历史记录保留数量
-    static let freeHistoryLimit = 10
+    static let freeHistoryLimit = 3
     
     // MARK: - 专业版配额（-1 表示无限）
     

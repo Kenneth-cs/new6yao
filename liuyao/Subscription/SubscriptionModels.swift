@@ -77,7 +77,7 @@ enum SubscriptionTier: String, Codable {
                 "SWOT分析：每月 10 次",
                 "决策矩阵：每月 10 次",
                 "学习中心：完整访问",
-                "历史记录：保留 10 条"
+                "历史记录：保留 3 条"
             ]
         case .proMonthly, .proYearly:
             return [
@@ -181,7 +181,7 @@ struct UsageQuota: Codable {
             dailyDivinationLimit: 1,
             monthlySWOTLimit: 10,
             monthlyMatrixLimit: 10,
-            historyRecordsLimit: 10
+            historyRecordsLimit: 3
         )
     }
     
@@ -363,7 +363,7 @@ extension FeatureComparisonItem {
         ),
         FeatureComparisonItem(
             name: "历史记录",
-            freeDescription: "保留 10 条",
+            freeDescription: "保留 3 条",
             proDescription: "无限保存",
             icon: "clock.arrow.circlepath"
         )

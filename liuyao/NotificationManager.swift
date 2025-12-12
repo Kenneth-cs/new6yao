@@ -39,27 +39,27 @@ class NotificationManager: NSObject, ObservableObject {
     
     // 通知内容配置
     private let dailyMessages: [(title: String, body: String)] = [
-        ("🌅 早安，新的一天开始了", "今日顺势如何？摇一摇，看看今天的方向"),
-        ("🌟 今日运势已更新", "看见自己、理解当下、顺势而为"),
-        ("☯️ 心有所问，卦有所答", "今日有什么困惑？让六爻为你指引方向"),
-        ("🔮 每日一卦，智慧相伴", "遇事不决，摇一摇，开启今日智慧之旅"),
-        ("🌙 晨起问卦，一日清明", "用古老智慧，开启美好的一天"),
-        ("✨ 今天想问什么问题？", "人生教练等你来探索答案"),
-        ("🎯 新的一天，新的开始", "摇一摇，看看今日顺势"),
-        ("💫 智慧启程", "让六爻陪你度过充实的一天")
+        ("🌅 早安，新的一天", "与其等待运势，不如创造顺势。摇一摇，看见当下的力量。"),
+        ("💡 每日觉察", "答案不在卦象里，而在你心里。让六爻做你的镜子，照见本心。"),
+        ("🌫️ 有些迷茫？", "并不是为了预知未来，而是为了看清现在。摇一摇，换个视角看问题。"),
+        ("✨ 相信直觉", "所有的卦象都是内心的投射。摇一摇，找回你内在的确定性。"),
+        ("☯️ 顺势而为", "不在逆境中消耗，不在顺境中迷失。理解当下，才能更好地出发。"),
+        ("🎯 遇事不决", "困惑的尽头是行动。摇一摇，让古老智慧为你厘清行动的方向。"),
+        ("🧘🏻‍♂️ 此刻，向内看", "外部世界喧嚣，内心需要安宁。每日一卦，与潜意识对话。"),
+        ("💫 智慧相伴", "看见自己、理解当下。愿六爻不仅是指引，更是陪伴。")
     ]
     
     private override init() {
         // 从UserDefaults读取设置
         self.dailyReminderEnabled = UserDefaults.standard.bool(forKey: "dailyReminderEnabled")
         
-        // 默认提醒时间为早上8点
+        // 默认提醒时间为早上8:30（避开通勤高峰，适合工作前觉察）
         if let savedTime = UserDefaults.standard.object(forKey: "reminderTime") as? Date {
             self.reminderTime = savedTime
         } else {
             var components = DateComponents()
             components.hour = 8
-            components.minute = 0
+            components.minute = 30
             self.reminderTime = Calendar.current.date(from: components) ?? Date()
         }
         
