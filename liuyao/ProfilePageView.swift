@@ -650,6 +650,7 @@ struct AppManagementSection: View {
     @Binding var showingCacheCleanup: Bool
     @Binding var showingDataBackup: Bool
     @Binding var showingPrivacySettings: Bool
+    @State private var showingNotificationSettings = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -665,6 +666,12 @@ struct AppManagementSection: View {
             }
             
             VStack(spacing: 12) {
+                SettingRow(
+                    icon: "bell.fill", 
+                    title: "每日提醒", 
+                    color: .orange,
+                    action: { showingNotificationSettings = true }
+                )
                 SettingRow(
                     icon: "trash.fill", 
                     title: "缓存清理", 
@@ -693,6 +700,9 @@ struct AppManagementSection: View {
                 .shadow(color: Color.primary.opacity(0.1), radius: 8, x: 0, y: 4)
         )
         .padding(.bottom, 30)
+        .sheet(isPresented: $showingNotificationSettings) {
+            NotificationSettingsView()
+        }
     }
 }
 

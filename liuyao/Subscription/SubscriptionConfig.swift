@@ -27,7 +27,7 @@ struct SubscriptionConfig {
     // MARK: - 免费版配额
     
     /// 免费版：每日问卦次数
-    static let freeDailyDivination = 3
+    static let freeDailyDivination = 1
     
     /// 免费版：每月SWOT分析次数
     static let freeMonthlySWOT = 10
@@ -57,7 +57,7 @@ struct SubscriptionConfig {
     /// 显示订阅引导的时机（使用次数阈值）
     struct PromptThresholds {
         /// 问卦次数达到多少时显示轻提示
-        static let divinationSoftPrompt = 2  // 第3次使用时提示
+        static let divinationSoftPrompt = 0  // 第1次使用时就提示
         
         /// SWOT次数达到多少时显示轻提示
         static let swotSoftPrompt = 8  // 第9次使用时提示

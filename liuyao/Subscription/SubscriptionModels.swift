@@ -73,7 +73,7 @@ enum SubscriptionTier: String, Codable {
         switch self {
         case .free:
             return [
-                "决策分析：每天 3 次",
+                "决策分析：每天 1 次",
                 "SWOT分析：每月 10 次",
                 "决策矩阵：每月 10 次",
                 "学习中心：完整访问",
@@ -178,7 +178,7 @@ struct UsageQuota: Codable {
     
     static var free: UsageQuota {
         return UsageQuota(
-            dailyDivinationLimit: 3,
+            dailyDivinationLimit: 1,
             monthlySWOTLimit: 10,
             monthlyMatrixLimit: 10,
             historyRecordsLimit: 10
@@ -339,7 +339,7 @@ extension FeatureComparisonItem {
     static let allFeatures: [FeatureComparisonItem] = [
         FeatureComparisonItem(
             name: "决策分析",
-            freeDescription: "每天 3 次",
+            freeDescription: "每天 1 次",
             proDescription: "无限次数",
             icon: "sparkles"
         ),
