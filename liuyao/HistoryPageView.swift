@@ -131,9 +131,9 @@ struct HistoryRecordCardView: View {
                     .foregroundColor(.secondary)
             }
             
-            // AI解读预览
+            // AI解读预览（清理markdown符号）
             if let interpretation = record.aiInterpretation, !interpretation.isEmpty {
-                Text(interpretation)
+                Text(cleanMarkdownSymbols(interpretation))
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
@@ -143,9 +143,55 @@ struct HistoryRecordCardView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
+                .fill(Color(.systemBackground))
                 .shadow(color: .purple.opacity(0.1), radius: 8, x: 0, y: 4)
         )
+    }
+    
+    /// 清理Markdown符号，用于预览显示
+    private func cleanMarkdownSymbols(_ text: String) -> String {
+        var result = text
+        
+        // 移除标题符号 ### ## #
+        result = result.replacingOccurrences(of: "###", with: "")
+        result = result.replacingOccurrences(of: "##", with: "")
+        result = result.replacingOccurrences(of: "#", with: "")
+        
+        // 移除加粗符号 **
+        result = result.replacingOccurrences(of: "**", with: "")
+        
+        // 移除斜体符号 *（但保留单独的星号）
+        // 这里用正则更精确，但简单处理也可以
+        
+        // 移除列表符号 - 开头的（保留连字符在文字中间的情况）
+        let lines = result.components(separatedBy: "\n")
+        result = lines.map { line in
+            var trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            if trimmedLine.hasPrefix("- ") {
+                trimmedLine = String(trimmedLine.dropFirst(2))
+            }
+            return trimmedLine
+        }.joined(separator: " ")
+        
+        // 移除【】中的标记词（如【框架解析】【总结】等）
+        if let regex = try? NSRegularExpression(pattern: "【[^】]*】", options: []) {
+            result = regex.stringByReplacingMatches(
+                in: result,
+                options: [],
+                range: NSRange(result.startIndex..., in: result),
+                withTemplate: ""
+            )
+        }
+        
+        // 清理多余空格
+        while result.contains("  ") {
+            result = result.replacingOccurrences(of: "  ", with: " ")
+        }
+        
+        // 去除首尾空格
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return result
     }
 }
 
