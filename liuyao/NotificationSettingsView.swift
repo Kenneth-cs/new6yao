@@ -206,24 +206,15 @@ struct NotificationSettingsView: View {
                 // 模拟通知
                 HStack(alignment: .top, spacing: 12) {
                     // App图标
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [.purple, .indigo]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    Image("NotificationPreviewIcon")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
                         .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: "sparkles")
-                                .foregroundColor(.white)
-                                .font(.body)
-                        )
+                        .cornerRadius(8)
                     
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text("六爻")
+                            Text("人生教练")
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.secondary)
@@ -235,12 +226,12 @@ struct NotificationSettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                         
-                        Text("🌅 早安，新的一天开始了")
+                        Text("💡 每日觉察")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
                         
-                        Text("今日顺势如何？摇一摇，看看今天的方向")
+                        Text("答案不在卦象里，而在你心里。让六爻做你的镜子，照见本心。")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .lineLimit(2)
