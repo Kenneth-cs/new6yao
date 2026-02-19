@@ -31,21 +31,21 @@ struct MainTabView: View {
             }
             .tag(1)
             
-            // Tab 3: 决策分析（原问卦功能）
+            // Tab 3: 摇卦（原决策分析）
             NavigationStack {
                 DecisionAnalysisView()
             }
             .tabItem {
-                Label("决策", systemImage: "sparkles")
+                Label("摇卦", systemImage: "sparkles")
             }
             .tag(2)
             
-            // Tab 4: 成长档案
+            // Tab 4: 决策矩阵（新功能占位）
             NavigationStack {
-                GrowthProfileView()
+                MatrixPlaceholderView()
             }
             .tabItem {
-                Label("成长", systemImage: "chart.line.uptrend.xyaxis")
+                Label("决策", systemImage: "square.grid.3x3.fill")
             }
             .tag(3)
             

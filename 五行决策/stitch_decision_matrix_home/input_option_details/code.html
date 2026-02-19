@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Life Coach - Scene Selection</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&amp;family=Playfair+Display:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#8B5CF6", 
+              "primary-light": "#A78BFA",
+              "primary-dark": "#7C3AED",
+              "background-light": "#FAF5FF", 
+              "background-dark": "#1F1D2B", 
+              "surface-light": "#FFFFFF",
+              "surface-dark": "#2D2B3B",
+              "text-light": "#333333",
+              "text-dark": "#E2E8F0",
+              "subtext-light": "#64748B",
+              "subtext-dark": "#94A3B8",
+            },
+            fontFamily: {
+              display: ['"Playfair Display"', 'serif'],
+              sans: ['"Noto Sans SC"', 'sans-serif'],
+            },
+            borderRadius: {
+              DEFAULT: "1rem",
+              "xl": "1.5rem",
+              "2xl": "2rem",
+            },
+            animation: {
+                'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+            },
+            keyframes: {
+                fadeInUp: {
+                    '0%': { opacity: '0', transform: 'translateY(10px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                }
+            }
+          },
+        },
+      };
+    </script>
+<style>
+        .bg-mystical {
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+        }
+        .bg-mystical-light {
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(267, 100%, 93%, 1) 0, transparent 50%), 
+                radial-gradient(at 50% 10%, hsla(267, 100%, 96%, 1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(280, 100%, 96%, 1) 0, transparent 50%);
+        }
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+        .ink-wash-wood {
+            background: radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 90%);
+            box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.1);
+        }
+        .ink-wash-water {
+            background: radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 90%);
+            box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.1);
+        }
+        .ink-wash-fire {
+            background: radial-gradient(circle at 50% 50%, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 90%);
+            box-shadow: inset 0 0 20px rgba(239, 68, 68, 0.1);
+        }
+        .ink-wash-earth {
+            background: radial-gradient(circle at 30% 70%, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 90%);
+            box-shadow: inset 0 0 20px rgba(245, 158, 11, 0.1);
+        }
+        .ink-wash-metal {
+            background: radial-gradient(circle at 70% 30%, rgba(148, 163, 184, 0.2) 0%, rgba(148, 163, 184, 0.05) 90%);
+            box-shadow: inset 0 0 20px rgba(148, 163, 184, 0.1);
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-sans text-text-light dark:text-text-dark antialiased selection:bg-primary selection:text-white transition-colors duration-300">
+<div class="fixed top-0 w-full h-12 z-50 flex items-center justify-between px-6 pt-2 text-sm font-medium">
+<span class="dark:text-white text-black">15:42</span>
+<div class="flex space-x-1 items-center dark:text-white text-black">
+<span class="material-icons-round text-base">signal_cellular_alt</span>
+<span class="material-icons-round text-base">wifi</span>
+<span class="material-icons-round text-lg">battery_full</span>
+</div>
+</div>
+<main class="relative min-h-screen w-full overflow-hidden flex flex-col pt-16 pb-24 px-4 bg-mystical-light dark:bg-mystical">
+<div class="absolute top-[-10%] left-[-10%] w-64 h-64 bg-primary/20 rounded-full blur-3xl pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-pulse"></div>
+<div class="absolute bottom-[20%] right-[-5%] w-72 h-72 bg-purple-300/20 dark:bg-purple-900/20 rounded-full blur-3xl pointer-events-none mix-blend-multiply dark:mix-blend-screen"></div>
+<header class="flex items-center justify-between mb-6 relative z-10 px-2">
+<button class="p-2 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+<span class="material-icons-round text-2xl text-subtext-light dark:text-subtext-dark">arrow_back_ios_new</span>
+</button>
+<h1 class="text-lg font-bold text-center">五行场景选择</h1>
+<button class="p-2 -mr-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+<span class="material-icons-round text-2xl text-primary">info_outline</span>
+</button>
+</header>
+<div class="relative z-10 mb-6 px-1">
+<div class="relative group">
+<span class="absolute left-4 top-3.5 material-icons-round text-subtext-light dark:text-subtext-dark group-focus-within:text-primary transition-colors">search</span>
+<input class="w-full pl-12 pr-4 py-3 bg-surface-light/80 dark:bg-surface-dark/60 backdrop-blur-md border border-white/40 dark:border-white/10 rounded-2xl shadow-sm focus:ring-2 focus:ring-primary/50 focus:border-primary text-sm dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all" placeholder="输入关键词，如 '腾讯'..." type="text" value="Tencent"/>
+<span class="absolute right-4 top-3.5 material-icons-round text-primary cursor-pointer hover:opacity-80">send</span>
+</div>
+<div class="flex flex-wrap gap-2 mt-3 animate-fade-in-up" style="animation-delay: 0.1s;">
+<div class="inline-flex items-center space-x-1 px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-lg text-xs font-medium">
+<span class="material-icons-round text-[14px]">local_fire_department</span>
+<span>Internet - Fire</span>
+<button class="ml-1 hover:text-red-800 dark:hover:text-red-200"><span class="material-icons-round text-[14px]">close</span></button>
+</div>
+</div>
+</div>
+<div class="flex-1 relative z-10 overflow-y-auto pb-4 scrollbar-hide">
+<h2 class="text-sm font-bold text-subtext-light dark:text-subtext-dark mb-4 px-1 uppercase tracking-wider">选择决策场景</h2>
+<div class="grid grid-cols-2 gap-4 mb-8">
+<button class="group relative overflow-hidden rounded-2xl p-5 text-left transition-all hover:scale-[1.02] active:scale-[0.98] border border-white/40 dark:border-white/5 animate-fade-in-up ink-wash-wood h-40 flex flex-col justify-between" style="animation-delay: 0.1s;">
+<div class="absolute inset-0 bg-white/40 dark:bg-black/10 backdrop-blur-[1px] group-hover:bg-white/20 transition-colors"></div>
+<div class="relative z-10 w-10 h-10 rounded-full bg-white dark:bg-white/10 flex items-center justify-center shadow-sm mb-3 text-green-600 dark:text-green-400">
+<span class="material-icons-round text-xl">school</span>
+</div>
+<div class="relative z-10">
+<h3 class="font-bold text-lg text-gray-800 dark:text-white mb-0.5">事业/学业</h3>
+<p class="text-[10px] font-medium text-green-700 dark:text-green-300 opacity-80">Career - [Wood]</p>
+</div>
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-green-500/20 rounded-full blur-2xl group-hover:bg-green-500/30 transition-colors"></div>
+</button>
+<button class="group relative overflow-hidden rounded-2xl p-5 text-left transition-all hover:scale-[1.02] active:scale-[0.98] border border-white/40 dark:border-white/5 animate-fade-in-up ink-wash-water h-40 flex flex-col justify-between" style="animation-delay: 0.2s;">
+<div class="absolute inset-0 bg-white/40 dark:bg-black/10 backdrop-blur-[1px] group-hover:bg-white/20 transition-colors"></div>
+<div class="relative z-10 w-10 h-10 rounded-full bg-white dark:bg-white/10 flex items-center justify-center shadow-sm mb-3 text-blue-600 dark:text-blue-400">
+<span class="material-icons-round text-xl">monetization_on</span>
+</div>
+<div class="relative z-10">
+<h3 class="font-bold text-lg text-gray-800 dark:text-white mb-0.5">投资/理财</h3>
+<p class="text-[10px] font-medium text-blue-700 dark:text-blue-300 opacity-80">Wealth - [Water]</p>
+</div>
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/20 rounded-full blur-2xl group-hover:bg-blue-500/30 transition-colors"></div>
+</button>
+<button class="group relative overflow-hidden rounded-2xl p-5 text-left transition-all hover:scale-[1.02] active:scale-[0.98] border border-white/40 dark:border-white/5 animate-fade-in-up ink-wash-fire h-40 flex flex-col justify-between" style="animation-delay: 0.3s;">
+<div class="absolute inset-0 bg-white/40 dark:bg-black/10 backdrop-blur-[1px] group-hover:bg-white/20 transition-colors"></div>
+<div class="relative z-10 w-10 h-10 rounded-full bg-white dark:bg-white/10 flex items-center justify-center shadow-sm mb-3 text-red-600 dark:text-red-400">
+<span class="material-icons-round text-xl">favorite</span>
+</div>
+<div class="relative z-10">
+<h3 class="font-bold text-lg text-gray-800 dark:text-white mb-0.5">情感/人际</h3>
+<p class="text-[10px] font-medium text-red-700 dark:text-red-300 opacity-80">Love - [Fire]</p>
+</div>
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-red-500/20 rounded-full blur-2xl group-hover:bg-red-500/30 transition-colors"></div>
+</button>
+<button class="group relative overflow-hidden rounded-2xl p-5 text-left transition-all hover:scale-[1.02] active:scale-[0.98] border border-white/40 dark:border-white/5 animate-fade-in-up ink-wash-earth h-40 flex flex-col justify-between" style="animation-delay: 0.4s;">
+<div class="absolute inset-0 bg-white/40 dark:bg-black/10 backdrop-blur-[1px] group-hover:bg-white/20 transition-colors"></div>
+<div class="relative z-10 w-10 h-10 rounded-full bg-white dark:bg-white/10 flex items-center justify-center shadow-sm mb-3 text-yellow-600 dark:text-yellow-500">
+<span class="material-icons-round text-xl">home</span>
+</div>
+<div class="relative z-10">
+<h3 class="font-bold text-lg text-gray-800 dark:text-white mb-0.5">置业/生活</h3>
+<p class="text-[10px] font-medium text-yellow-700 dark:text-yellow-300 opacity-80">Living - [Earth]</p>
+</div>
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-yellow-500/20 rounded-full blur-2xl group-hover:bg-yellow-500/30 transition-colors"></div>
+</button>
+<button class="group relative overflow-hidden rounded-2xl p-5 text-left transition-all hover:scale-[1.02] active:scale-[0.98] border border-white/40 dark:border-white/5 animate-fade-in-up ink-wash-metal h-40 flex flex-col justify-between col-span-2" style="animation-delay: 0.5s;">
+<div class="absolute inset-0 bg-white/40 dark:bg-black/10 backdrop-blur-[1px] group-hover:bg-white/20 transition-colors"></div>
+<div class="flex items-start justify-between">
+<div class="relative z-10 w-10 h-10 rounded-full bg-white dark:bg-white/10 flex items-center justify-center shadow-sm mb-3 text-slate-600 dark:text-slate-400">
+<span class="material-icons-round text-xl">flight_takeoff</span>
+</div>
+<span class="bg-white/50 dark:bg-black/20 text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">自定义场景</span>
+</div>
+<div class="relative z-10">
+<h3 class="font-bold text-lg text-gray-800 dark:text-white mb-0.5">出行/其他</h3>
+<p class="text-[10px] font-medium text-slate-700 dark:text-slate-300 opacity-80">Travel - [Metal]</p>
+</div>
+<div class="absolute -right-4 -bottom-4 w-24 h-24 bg-slate-400/20 rounded-full blur-2xl group-hover:bg-slate-400/30 transition-colors"></div>
+</button>
+</div>
+<div class="animate-fade-in-up mb-6" style="animation-delay: 0.6s;">
+<div class="bg-white dark:bg-surface-dark/40 rounded-[2rem] p-6 shadow-xl shadow-purple-500/5 backdrop-blur-xl">
+<div class="flex items-center space-x-3 mb-4">
+<div class="w-1.5 h-6 bg-primary rounded-full"></div>
+<h2 class="text-lg font-bold text-text-light dark:text-text-dark">决策选项</h2>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block text-sm font-medium text-subtext-light dark:text-subtext-dark mb-2">Option 1</label>
+<div class="relative group">
+<div class="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
+<span class="material-icons-round text-2xl text-primary">domain</span>
+</div>
+<input class="w-full pl-12 pr-4 py-4 bg-white/50 dark:bg-surface-dark/50 border border-gray-200 dark:border-white/10 rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary text-base dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all outline-none" placeholder="Enter company name" type="text" value=""/>
+</div>
+</div>
+<button class="w-full py-4 border-2 border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 rounded-2xl flex items-center justify-center text-primary font-medium transition-all group">
+<span class="material-icons-round mr-2 group-hover:scale-110 transition-transform">add_circle_outline</span>
+<span>Add Comparison Decision (0/3)</span>
+</button>
+</div>
+</div>
+</div>
+<div class="mt-4 pt-2 z-10 w-full max-w-sm mx-auto mb-10">
+<button class="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-2xl shadow-lg shadow-primary/40 font-bold text-lg flex items-center justify-center space-x-2 transition-all transform hover:scale-[1.02] active:scale-[0.98]">
+<span>开始决策分析</span>
+<span class="material-icons-round">auto_awesome</span>
+</button>
+</div>
+</div>
+<nav class="fixed bottom-0 left-0 w-full bg-white/90 dark:bg-[#1F1D2B]/90 backdrop-blur-lg border-t border-gray-200 dark:border-white/5 pb-6 pt-3 px-6 z-40 flex justify-between items-center text-[10px] font-medium text-subtext-light dark:text-subtext-dark">
+<button class="flex flex-col items-center space-y-1 hover:text-primary transition-colors">
+<span class="material-icons-round text-2xl">menu_book</span>
+<span>Learning</span>
+</button>
+<button class="flex flex-col items-center space-y-1 hover:text-primary transition-colors">
+<span class="material-icons-round text-2xl">psychology</span>
+<span>Thinking</span>
+</button>
+<button class="flex flex-col items-center space-y-1 -mt-6">
+<div class="w-14 h-14 bg-gradient-to-tr from-primary to-purple-400 rounded-full flex items-center justify-center shadow-lg shadow-primary/40 text-white transform hover:scale-110 transition-transform">
+<span class="material-icons-round text-3xl">auto_awesome</span>
+</div>
+<span class="text-primary font-bold mt-1">Decision</span>
+</button>
+<button class="flex flex-col items-center space-y-1 hover:text-primary transition-colors">
+<span class="material-icons-round text-2xl">trending_up</span>
+<span>Growth</span>
+</button>
+<button class="flex flex-col items-center space-y-1 hover:text-primary transition-colors">
+<span class="material-icons-round text-2xl">person</span>
+<span>Me</span>
+</button>
+</nav>
+</main>
+</body></html>

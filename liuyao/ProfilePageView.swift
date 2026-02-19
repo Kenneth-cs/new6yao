@@ -8,13 +8,30 @@ struct ProfilePageView: View {
     @State private var showingDataBackup = false
     @State private var showingPrivacySettings = false
     
+    // 添加记录状态
+    @State private var recentRecords: [DivinationRecord] = []
+    
     var body: some View {
         // 直接显示内容，不使用NavigationView
         // 因为已经在MainTabView中被NavigationStack包裹了
         profileContent
             .onAppear {
                 statisticsService.loadStatistics(context: viewContext)
+                fetchRecentRecords() // 加载记录
             }
+    }
+    
+    // 获取最近记录
+    private func fetchRecentRecords() {
+        let request: NSFetchRequest<DivinationRecord> = DivinationRecord.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \DivinationRecord.createdAt, ascending: false)]
+        request.fetchLimit = 3 // 只显示最近3条
+        
+        do {
+            recentRecords = try viewContext.fetch(request)
+        } catch {
+            print("获取记录失败: \(error)")
+        }
     }
     
     // 提取公共的内容视图
@@ -29,6 +46,9 @@ struct ProfilePageView: View {
                 
                 // 统计面板
                 StatisticsPanel(statisticsService: statisticsService)
+                
+                // 最近决策记录 (从成长档案移过来，始终显示)
+                RecentDecisionsSection(records: recentRecords)
                 
                 // 应用管理
                 AppManagementSection(
@@ -189,6 +209,115 @@ struct StatisticsPanel: View {
                 .fill(Color(.secondarySystemBackground))
                 .shadow(color: Color.primary.opacity(0.1), radius: 8, x: 0, y: 4)
         )
+    }
+}
+
+// MARK: - 最近决策部分
+struct RecentDecisionsSection: View {
+    let records: [DivinationRecord]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader
+            recordsList
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
+        )
+    }
+    
+    // 拆分子视图：标题栏
+    private var sectionHeader: some View {
+        HStack {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundColor(.purple)
+                .font(.title3)
+            Text("最近决策")
+                .font(.title3)
+                .fontWeight(.bold)
+            Spacer()
+            NavigationLink(destination: HistoryPageView()) {
+                Text("查看全部")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    // 拆分子视图：记录列表
+    private var recordsList: some View {
+        Group {
+            if records.isEmpty {
+                // 空状态提示
+                VStack(spacing: 12) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 36))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("暂无决策记录")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("去「摇卦」tab 进行第一次预测吧")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(records, id: \.objectID) { record in
+                        NavigationLink(destination: HistoryDetailView(record: record)) {
+                            RecentDecisionRow(record: record)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 拆分子视图：单条记录行（彻底解决编译器类型检查超时）
+private struct RecentDecisionRow: View {
+    let record: DivinationRecord
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(record.question ?? "无标题")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                tagRow
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.gray.opacity(0.5))
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+    
+    private var tagRow: some View {
+        HStack {
+            Text("六爻预测")
+                .font(.caption)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.purple.opacity(0.1))
+                .foregroundColor(.purple)
+                .cornerRadius(4)
+            if let date = record.createdAt {
+                Text(date, style: .date)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 }
 
