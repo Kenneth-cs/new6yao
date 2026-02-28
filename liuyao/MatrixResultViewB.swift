@@ -9,6 +9,8 @@ struct MatrixResultViewB: View {
     let options:      [String]
     let matrixResult: DecisionMatrixResultV2?
 
+    @Environment(\.dismiss) private var dismiss
+
     private var result: DecisionMatrixResultV2 { matrixResult ?? .mock }
 
     // ── Design Token ────────────────────────────────────────────
@@ -38,14 +40,14 @@ struct MatrixResultViewB: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
                     verdictHeader
-                    stepDivider(tag: "STEP 1", title: "五行矩阵打分")
-                    matrixTable
-                    stepDivider(tag: "STEP 2", title: "决策评分总览")
+                    stepDivider(tag: "STEP 1", title: "决策评分总览")
                     scoreCards
                     if result.hasFatalRisk {
                         stepDivider(tag: "警告", title: "一票否决")
                         fatalRiskCard
                     }
+                    stepDivider(tag: "STEP 2", title: "五行矩阵打分")
+                    matrixTable
                     stepDivider(tag: "STEP 3", title: "决策延伸分析")
                     extensionsSection
                     stepDivider(tag: "STEP 4", title: "落地建议手册")
@@ -58,7 +60,15 @@ struct MatrixResultViewB: View {
         }
         .navigationTitle("决策报告")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .fontWeight(.semibold)
+                        .foregroundColor(indigo)
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {}) {
                     Image(systemName: "square.and.arrow.up")

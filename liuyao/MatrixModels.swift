@@ -62,9 +62,11 @@ class BirthInfoStore: ObservableObject {
     static let shared = BirthInfoStore()
     private init() { load() }
 
-    private let ud          = UserDefaults.standard
-    private let keyDate     = "matrix_birth_date"
-    private let keyHour     = "matrix_birth_hour"
+    private let ud              = UserDefaults.standard
+    private let keyDate         = "matrix_birth_date"
+    private let keyHour         = "matrix_birth_hour"
+    private let keyHasSet       = "matrix_birth_has_set"       // 是否曾主动设置过生日
+    private let keyPortraitCache = "matrix_portrait_cache"     // 画像结果 JSON 缓存
 
     @Published var birthday: Date = {
         var c = DateComponents(); c.year = 1995; c.month = 8; c.day = 15
@@ -72,15 +74,39 @@ class BirthInfoStore: ObservableObject {
     }()
     @Published var birthHour: ChineseHour = .wu
 
-    /// 保存到 UserDefaults
+    /// 用户是否已主动设置过生辰（区别于默认值兜底）
+    var hasSetBirthday: Bool {
+        ud.bool(forKey: keyHasSet)
+    }
+
+    /// 保存生辰到 UserDefaults
     func save(birthday newDate: Date, hour newHour: ChineseHour) {
         birthday  = newDate
         birthHour = newHour
         ud.set(newDate.timeIntervalSince1970, forKey: keyDate)
         ud.set(newHour.rawValue,              forKey: keyHour)
+        ud.set(true,                          forKey: keyHasSet)
     }
 
-    /// 从 UserDefaults 读取
+    /// 将 AI 画像结果缓存到本地
+    func savePortrait(_ portrait: EnergyPortraitResult) {
+        if let data = try? JSONEncoder().encode(portrait) {
+            ud.set(data, forKey: keyPortraitCache)
+        }
+    }
+
+    /// 读取本地缓存的画像结果；若无则返回 nil
+    func loadPortrait() -> EnergyPortraitResult? {
+        guard let data = ud.data(forKey: keyPortraitCache) else { return nil }
+        return try? JSONDecoder().decode(EnergyPortraitResult.self, from: data)
+    }
+
+    /// 清除画像缓存（修改生辰后调用）
+    func clearPortraitCache() {
+        ud.removeObject(forKey: keyPortraitCache)
+    }
+
+    /// 从 UserDefaults 读取生辰
     func load() {
         if let ts = ud.value(forKey: keyDate) as? Double {
             birthday = Date(timeIntervalSince1970: ts)

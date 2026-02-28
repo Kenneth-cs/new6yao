@@ -38,8 +38,8 @@ extension FiveElement {
 // ============================================================
 struct EnergyPortraitView: View {
 
-    // 命局画像（默认 Mock，AI 分析后替换）
-    @State private var portrait: EnergyPortraitResult = .mock
+    // 命局画像（nil = 未设置生辰 / 未曾分析）
+    @State private var portrait: EnergyPortraitResult? = nil
 
     // 生日 + 时辰（从本地存储读取初始值）
     @State private var selectedBirthday: Date = BirthInfoStore.shared.birthday
@@ -55,73 +55,104 @@ struct EnergyPortraitView: View {
     @State private var isAnalyzing = false
     @State private var analyzeError: String? = nil
 
+    // 便于在 body 中判断是否已设置生辰
+    private var hasBirthday: Bool { BirthInfoStore.shared.hasSetBirthday }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Color(red: 0.95, green: 0.94, blue: 0.98).ignoresSafeArea()
 
-            // ── 主内容 ScrollView（底部留出按钮高度）──────────
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    birthdayCard
-                    if isAnalyzing {
-                        analyzeLoadingView
-                    } else {
-                        FiveElementDiagram(portrait: portrait)
-                            .frame(height: 320)
+            if hasBirthday || portrait != nil {
+                // ── 已设置生辰：主内容 ──────────────────────────
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        birthdayCard
+                        if isAnalyzing {
+                            analyzeLoadingView
+                        } else if let p = portrait {
+                            FiveElementDiagram(portrait: p)
+                                .frame(height: 320)
+                        }
+                        if let p = portrait, !isAnalyzing {
+                            diagnosticCard(p)
+                        }
+                        Spacer(minLength: 110)
                     }
-                    diagnosticCard
-                    Spacer(minLength: 110)  // 为底部悬浮按钮留空间
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
-            }
 
-            // ── 悬浮底部 CTA ──────────────────────────────────
-            VStack(spacing: 0) {
-                // 渐变遮罩（从透明→背景色）
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.95, green: 0.94, blue: 0.98).opacity(0),
-                        Color(red: 0.95, green: 0.94, blue: 0.98)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: 32)
-                .allowsHitTesting(false)
+                // ── 悬浮底部 CTA ──────────────────────────────
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.95, green: 0.94, blue: 0.98).opacity(0),
+                            Color(red: 0.95, green: 0.94, blue: 0.98)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 32)
+                    .allowsHitTesting(false)
 
-                // 按钮区
-                VStack(spacing: 8) {
-                    NavigationLink(destination: ScenarioSelectionView(portrait: portrait)) {
-                        stickyDecisionButton
+                    VStack(spacing: 8) {
+                        if let p = portrait {
+                            NavigationLink(destination: ScenarioSelectionView(portrait: p)) {
+                                stickyDecisionButton(p)
+                            }
+                            .padding(.horizontal, 20)
+                            .disabled(isAnalyzing)
+                        }
+                        Text("基于你的八字命局，AI 为你分析最优选项")
+                            .font(.caption2)
+                            .foregroundColor(.secondary.opacity(0.75))
+                            .padding(.bottom, 8)
                     }
-                    .padding(.horizontal, 20)
-
-                    Text("基于你的八字命局，AI 为你分析最优选项")
-                        .font(.caption2)
-                        .foregroundColor(.secondary.opacity(0.75))
-                        .padding(.bottom, 8)
+                    .background(Color(red: 0.95, green: 0.94, blue: 0.98))
                 }
-                .background(Color(red: 0.95, green: 0.94, blue: 0.98))
+            } else {
+                // ── 未设置生辰：引导空状态 ──────────────────────
+                emptyStateView
             }
         }
         .navigationTitle("五行能量画像")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {}) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .foregroundColor(.purple)
+                if hasBirthday {
+                    Button(action: {
+                        tempBirthday = selectedBirthday
+                        tempHour     = selectedHour
+                        showBirthdayPicker = true
+                    }) {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.purple)
+                    }
                 }
             }
         }
         .sheet(isPresented: $showBirthdayPicker) {
             birthdayPickerSheet
         }
+        .onAppear { loadOnAppear() }
+    }
+
+    // MARK: - 启动时加载逻辑
+    private func loadOnAppear() {
+        guard hasBirthday else { return }   // 未设置生辰，显示空状态
+        selectedBirthday = BirthInfoStore.shared.birthday
+        selectedHour     = BirthInfoStore.shared.birthHour
+
+        if let cached = BirthInfoStore.shared.loadPortrait() {
+            // 命中缓存，直接显示，无需请求 AI
+            portrait = cached
+        } else {
+            // 有生辰但无缓存，自动触发分析
+            analyzePortrait()
+        }
     }
 
     // MARK: - 生辰日期卡（可点击修改，含时辰）
     private var birthdayCard: some View {
         Button(action: {
-            // 打开 Sheet 时，用临时变量，不直接改正式值
             tempBirthday = selectedBirthday
             tempHour     = selectedHour
             showBirthdayPicker = true
@@ -133,22 +164,18 @@ struct EnergyPortraitView: View {
                     HStack(spacing: 8) {
                         Text(birthdayDisplayString)
                             .font(.subheadline).fontWeight(.semibold)
-                        // 时辰 Badge
                         Text("\(selectedHour.rawValue) · \(selectedHour.timeRange)")
                             .font(.caption2).fontWeight(.medium)
                             .padding(.horizontal, 8).padding(.vertical, 3)
                             .background(Color.purple.opacity(0.10))
                             .foregroundColor(.purple).cornerRadius(16)
                     }
-                    // 八字排盘
                     Text(BaziEngine.shared.getBaziString(date: selectedBirthday, hour: selectedHour))
                         .font(.system(size: 15, weight: .medium, design: .serif))
                         .foregroundColor(.primary.opacity(0.8))
                         .padding(.vertical, 2)
-                    
-                    // 日主（AI 分析后显示）
-                    if !portrait.dayMaster.isEmpty {
-                        Text("日主：\(portrait.dayMaster)  |  喜：\(portrait.favorableElements.joined(separator: "/"))  忌：\(portrait.unfavorableElements.joined(separator: "/"))")
+                    if let p = portrait, !p.dayMaster.isEmpty {
+                        Text("日主：\(p.dayMaster)  |  喜：\(p.favorableElements.joined(separator: "/"))  忌：\(p.unfavorableElements.joined(separator: "/"))")
                             .font(.caption2).foregroundColor(.secondary)
                     }
                 }
@@ -189,19 +216,18 @@ struct EnergyPortraitView: View {
     }
 
     // MARK: - 能量诊断卡
-    private var diagnosticCard: some View {
+    private func diagnosticCard(_ p: EnergyPortraitResult) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Label("能量诊断", systemImage: "sparkles")
                     .font(.headline).fontWeight(.bold)
                 Spacer()
-                if isAnalyzing {
-                    Text("分析中...")
-                        .font(.caption).foregroundColor(.purple)
-                }
+                // 缓存角标
+                Label("已缓存", systemImage: "checkmark.icloud.fill")
+                    .font(.caption2).foregroundColor(.purple.opacity(0.6))
             }
 
-            Text(portrait.diagnosis)
+            Text(p.diagnosis)
                 .font(.body).foregroundColor(.secondary).lineSpacing(5)
 
             if let err = analyzeError {
@@ -211,7 +237,7 @@ struct EnergyPortraitView: View {
 
             Divider()
 
-            let rem = portrait.remedyFiveElement
+            let rem = p.remedyFiveElement
             HStack(spacing: 12) {
                 Image(systemName: rem.icon)
                     .font(.title2).foregroundColor(rem.color)
@@ -225,11 +251,10 @@ struct EnergyPortraitView: View {
                         .foregroundColor(rem.color)
                 }
                 Spacer()
-                // 喜用神 Tag 行
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("喜用神").font(.caption2).foregroundColor(.secondary)
                     HStack(spacing: 4) {
-                        ForEach(portrait.favorableFiveElements, id: \.rawValue) { el in
+                        ForEach(p.favorableFiveElements, id: \.rawValue) { el in
                             Text(el.rawValue)
                                 .font(.caption2).fontWeight(.semibold)
                                 .foregroundColor(el.color)
@@ -247,11 +272,10 @@ struct EnergyPortraitView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - 悬浮决策按钮（高点击欲版）
-    private var stickyDecisionButton: some View {
+    // MARK: - 悬浮决策按钮
+    private func stickyDecisionButton(_ p: EnergyPortraitResult) -> some View {
         HStack(spacing: 0) {
-            // 左侧：日主五行图标
-            let el = portrait.favorableFiveElements.first
+            let el = p.favorableFiveElements.first
             Image(systemName: el?.icon ?? "sparkles")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
@@ -261,26 +285,21 @@ struct EnergyPortraitView: View {
 
             Spacer()
 
-            // 中间：主文案
             VStack(spacing: 3) {
                 Text("开始五行决策分析")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.white)
-                Text(isAnalyzing ? "命局推算中…" : "喜\(portrait.favorableElements.joined(separator: "/")) · 忌\(portrait.unfavorableElements.joined(separator: "/"))")
+                Text("喜\(p.favorableElements.joined(separator: "/")) · 忌\(p.unfavorableElements.joined(separator: "/"))")
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.75))
             }
 
             Spacer()
 
-            // 右侧：箭头圆圈
             ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.2))
-                    .frame(width: 36, height: 36)
+                Circle().fill(Color.white.opacity(0.2)).frame(width: 36, height: 36)
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundColor(.white)
+                    .font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
             }
             .padding(.trailing, 10)
         }
@@ -295,6 +314,97 @@ struct EnergyPortraitView: View {
             in: RoundedRectangle(cornerRadius: 20)
         )
         .shadow(color: Color.purple.opacity(0.42), radius: 16, x: 0, y: 8)
+    }
+
+    // MARK: - 空状态引导页（未设置生辰）
+    private var emptyStateView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 28) {
+                // 图形区
+                ZStack {
+                    Circle()
+                        .fill(Color.purple.opacity(0.08))
+                        .frame(width: 140, height: 140)
+                    Circle()
+                        .fill(Color.purple.opacity(0.06))
+                        .frame(width: 100, height: 100)
+                    Image(systemName: "person.crop.circle.badge.clock")
+                        .font(.system(size: 48))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(red: 0.45, green: 0.3, blue: 0.85),
+                                         Color(red: 0.6,  green: 0.35, blue: 0.9)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
+                }
+
+                // 文案区
+                VStack(spacing: 10) {
+                    Text("输入生辰，解锁你的五行命局")
+                        .font(.title3).fontWeight(.bold)
+                        .multilineTextAlignment(.center)
+                    Text("AI 将根据你的出生日期和时辰\n推算八字五行能量分布，生成专属命局画像")
+                        .font(.subheadline).foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+
+                // 要点列表
+                VStack(alignment: .leading, spacing: 12) {
+                    emptyStateFeatureRow(icon: "chart.pie.fill",    color: .purple,
+                                         text: "五行能量比例可视化图")
+                    emptyStateFeatureRow(icon: "sparkles",          color: .orange,
+                                         text: "AI 智能诊断你的命局特质")
+                    emptyStateFeatureRow(icon: "arrow.triangle.branch", color: .teal,
+                                         text: "个性化决策喜忌神指引")
+                }
+                .padding(.horizontal, 24)
+                .padding(16)
+                .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+                .padding(.horizontal, 32)
+
+                // 主按钮
+                Button(action: {
+                    tempBirthday = selectedBirthday
+                    tempHour     = selectedHour
+                    showBirthdayPicker = true
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.plus")
+                        Text("立即输入生辰")
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(red: 0.45, green: 0.3, blue: 0.85),
+                                     Color(red: 0.6,  green: 0.35, blue: 0.9)],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(16)
+                    .shadow(color: Color.purple.opacity(0.35), radius: 12, x: 0, y: 6)
+                }
+                .padding(.horizontal, 32)
+            }
+
+            Spacer()
+        }
+    }
+
+    private func emptyStateFeatureRow(icon: String, color: Color, text: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.body).foregroundColor(color)
+                .frame(width: 28)
+            Text(text)
+                .font(.subheadline).foregroundColor(.primary.opacity(0.75))
+        }
     }
 
     // MARK: - 生日 + 时辰选择器 Sheet
@@ -351,10 +461,11 @@ struct EnergyPortraitView: View {
 
                 // ── 确认按钮 ──
                 Button(action: {
-                    // 保存到本地 + 更新当前页状态
                     selectedBirthday = tempBirthday
                     selectedHour     = tempHour
                     BirthInfoStore.shared.save(birthday: tempBirthday, hour: tempHour)
+                    BirthInfoStore.shared.clearPortraitCache()  // 生辰变更，清除旧缓存
+                    portrait = nil                               // 清空当前显示
                     showBirthdayPicker = false
                     analyzePortrait()
                 }) {
@@ -388,7 +499,7 @@ struct EnergyPortraitView: View {
         }
     }
 
-    // MARK: - 调用 AI 分析生辰（携带时辰）
+    // MARK: - 调用 AI 分析生辰（携带时辰），成功后写缓存
     private func analyzePortrait() {
         isAnalyzing = true
         analyzeError = nil
@@ -399,13 +510,18 @@ struct EnergyPortraitView: View {
                     birthHour: selectedHour
                 )
                 await MainActor.run {
-                    portrait = result
+                    portrait    = result
                     isAnalyzing = false
+                    BirthInfoStore.shared.savePortrait(result)  // 写入本地缓存
                 }
             } catch {
                 await MainActor.run {
-                    analyzeError = "AI 分析暂时失败，已显示示例数据"
-                    isAnalyzing = false
+                    // 失败时加载旧缓存；若无缓存则展示 mock 并标注错误
+                    if portrait == nil {
+                        portrait = BirthInfoStore.shared.loadPortrait() ?? .mock
+                    }
+                    analyzeError = "AI 推算暂时失败，已显示上次结果"
+                    isAnalyzing  = false
                 }
                 print("[EnergyPortraitView] AI 分析失败: \(error)")
             }
