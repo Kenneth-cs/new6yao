@@ -36,16 +36,24 @@ struct MainTabView: View {
                 DecisionAnalysisView()
             }
             .tabItem {
-                Label("摇卦", systemImage: "sparkles")
+                Label {
+                    Text("摇卦")
+                } icon: {
+                    Image("tab-hexagram")
+                }
             }
             .tag(2)
             
-            // Tab 4: 决策矩阵（新功能占位）
+            // Tab 4: 决策矩阵
             NavigationStack {
                 EnergyPortraitView()
             }
             .tabItem {
-                Label("决策", systemImage: "square.grid.3x3.fill")
+                Label {
+                    Text("决策")
+                } icon: {
+                    Image("tab-yinyang")
+                }
             }
             .tag(3)
             

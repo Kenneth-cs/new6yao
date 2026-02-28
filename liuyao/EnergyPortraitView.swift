@@ -56,26 +56,51 @@ struct EnergyPortraitView: View {
     @State private var analyzeError: String? = nil
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             Color(red: 0.95, green: 0.94, blue: 0.98).ignoresSafeArea()
 
+            // ── 主内容 ScrollView（底部留出按钮高度）──────────
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
                     birthdayCard
                     if isAnalyzing {
                         analyzeLoadingView
                     } else {
-                        FluidEnergyRing(values: portrait.values)
-                            .frame(height: 340)
+                        FiveElementDiagram(portrait: portrait)
+                            .frame(height: 320)
                     }
                     diagnosticCard
-                    NavigationLink(destination: ScenarioSelectionView(portrait: portrait)) {
-                        startDecisionButton
-                    }
-                    .padding(.horizontal, 20)
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 110)  // 为底部悬浮按钮留空间
                 }
                 .padding(.top, 8)
+            }
+
+            // ── 悬浮底部 CTA ──────────────────────────────────
+            VStack(spacing: 0) {
+                // 渐变遮罩（从透明→背景色）
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.95, green: 0.94, blue: 0.98).opacity(0),
+                        Color(red: 0.95, green: 0.94, blue: 0.98)
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 32)
+                .allowsHitTesting(false)
+
+                // 按钮区
+                VStack(spacing: 8) {
+                    NavigationLink(destination: ScenarioSelectionView(portrait: portrait)) {
+                        stickyDecisionButton
+                    }
+                    .padding(.horizontal, 20)
+
+                    Text("基于你的八字命局，AI 为你分析最优选项")
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.75))
+                        .padding(.bottom, 8)
+                }
+                .background(Color(red: 0.95, green: 0.94, blue: 0.98))
             }
         }
         .navigationTitle("五行能量画像")
@@ -222,26 +247,54 @@ struct EnergyPortraitView: View {
         .padding(.horizontal, 20)
     }
 
-    // MARK: - 开始决策按钮
-    private var startDecisionButton: some View {
-        HStack(spacing: 10) {
-            Text("开始决策")
-                .font(.headline).fontWeight(.semibold)
-            Image(systemName: "arrow.right")
-                .font(.headline)
+    // MARK: - 悬浮决策按钮（高点击欲版）
+    private var stickyDecisionButton: some View {
+        HStack(spacing: 0) {
+            // 左侧：日主五行图标
+            let el = portrait.favorableFiveElements.first
+            Image(systemName: el?.icon ?? "sparkles")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .frame(width: 46, height: 46)
+                .background(Color.white.opacity(0.15), in: Circle())
+                .padding(.leading, 8)
+
+            Spacer()
+
+            // 中间：主文案
+            VStack(spacing: 3) {
+                Text("开始五行决策分析")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.white)
+                Text(isAnalyzing ? "命局推算中…" : "喜\(portrait.favorableElements.joined(separator: "/")) · 忌\(portrait.unfavorableElements.joined(separator: "/"))")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.75))
+            }
+
+            Spacer()
+
+            // 右侧：箭头圆圈
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.2))
+                    .frame(width: 36, height: 36)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(.white)
+            }
+            .padding(.trailing, 10)
         }
-        .foregroundColor(.white)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .padding(.vertical, 14)
         .background(
             LinearGradient(
-                colors: [Color(red: 0.45, green: 0.3, blue: 0.85),
-                         Color(red: 0.6,  green: 0.35, blue: 0.9)],
+                colors: [Color(red: 0.40, green: 0.25, blue: 0.82),
+                         Color(red: 0.62, green: 0.32, blue: 0.92)],
                 startPoint: .leading, endPoint: .trailing
             ),
-            in: Capsule()
+            in: RoundedRectangle(cornerRadius: 20)
         )
-        .shadow(color: Color.purple.opacity(0.35), radius: 12, x: 0, y: 6)
+        .shadow(color: Color.purple.opacity(0.42), radius: 16, x: 0, y: 8)
     }
 
     // MARK: - 生日 + 时辰选择器 Sheet
@@ -361,123 +414,241 @@ struct EnergyPortraitView: View {
 }
 
 // ============================================================
-// MARK: - 动态流体圆环（比例色段版，最终版）
+// MARK: - 五行五星图（参考图一：节点 + 生弧 + 克星线 + 日主圆心）
 // ============================================================
-struct FluidEnergyRing: View {
-    let values: [FiveElement: Double]
-    @State private var glowing = false
+struct FiveElementDiagram: View {
+    let portrait: EnergyPortraitResult
+    @State private var appeared = false
+    @State private var pulse    = false
 
-    // 五行相生顺序（从正上方顺时针）
-    private let elementOrder: [FiveElement] = [.fire, .earth, .metal, .water, .wood]
+    // 五角形方位顺时针从顶部：火→土→金→水→木
+    // 对应五行相生顺序：木生火→火生土→土生金→金生水→水生木
+    private let elements: [FiveElement] = [.fire, .earth, .metal, .water, .wood]
 
-    private var dominantElement: FiveElement {
-        values.max(by: { $0.value < $1.value })?.key ?? .fire
+    // 解析日主所属五行（"丁火" → .fire）
+    private var dayMasterEl: FiveElement? {
+        let dm = portrait.dayMaster
+        if dm.contains("木") { return .wood  }
+        if dm.contains("火") { return .fire  }
+        if dm.contains("土") { return .earth }
+        if dm.contains("金") { return .metal }
+        if dm.contains("水") { return .water }
+        return nil
     }
 
-    // 计算每段的 trim 起止点（按能量值比例）
-    private var segments: [(element: FiveElement, start: Double, end: Double)] {
-        let total = max(elementOrder.reduce(0.0) { $0 + (values[$1] ?? 0) }, 0.001)
-        var result: [(FiveElement, Double, Double)] = []
-        var cumulative = 0.0
-        for el in elementOrder {
-            let frac = (values[el] ?? 0.001) / total
-            result.append((el, cumulative, cumulative + frac))
-            cumulative += frac
-        }
-        return result
+    private func pct(_ el: FiveElement) -> Int {
+        Int(round((portrait.values[el] ?? 0) * 100))
     }
 
-    // 根据段中点角度计算标签偏移
-    private func labelOffset(start: Double, end: Double, radius: CGFloat = 150) -> CGSize {
-        let mid = (start + end) / 2.0
-        let angle = mid * 2.0 * .pi - (.pi / 2.0)
-        return CGSize(width: radius * CGFloat(cos(angle)), height: radius * CGFloat(sin(angle)))
+    // 五角形节点位置（index 0 = 顶部，顺时针）
+    private func nodePos(i: Int, cx: CGFloat, cy: CGFloat, R: CGFloat) -> CGPoint {
+        let a = Double(i) * (2 * .pi / 5) - .pi / 2
+        return CGPoint(x: cx + R * CGFloat(cos(a)), y: cy + R * CGFloat(sin(a)))
     }
 
     var body: some View {
-        ZStack {
-            // 1. 底层轨道
-            Circle()
-                .stroke(Color(.systemGray5), lineWidth: 44)
-                .padding(38)
+        GeometryReader { geo in
+            let W = geo.size.width
+            let H = geo.size.height
+            let cx = W / 2
+            let cy = H / 2
+            let R  = min(W, H) * 0.36          // 节点轨道半径
+            let arcR = R + 22                   // 生-弧半径（稍外）
 
-            // 2. 主导元素柔光晕
-            Circle()
-                .stroke(dominantElement.color.opacity(glowing ? 0.22 : 0.06), lineWidth: 58)
-                .padding(28)
-                .blur(radius: 16)
+            ZStack {
+                // ── 淡色背景圆 ──────────────────────────────
+                Circle()
+                    .fill(Color(red: 0.98, green: 0.96, blue: 0.94).opacity(0.8))
+                    .frame(width: R * 2 + 90, height: R * 2 + 90)
 
-            // 3. 比例色段（核心）
-            ForEach(0..<segments.count, id: \.self) { i in
-                segmentArc(index: i)
+                // ── 克-星形线（连接间隔1的节点，形成五芒星）──
+                ForEach(0..<5, id: \.self) { i in
+                    let p1 = nodePos(i: i,       cx: cx, cy: cy, R: R - 26)
+                    let p2 = nodePos(i: (i+2)%5, cx: cx, cy: cy, R: R - 26)
+                    Path { path in
+                        path.move(to: p1)
+                        path.addLine(to: p2)
+                    }
+                    .stroke(
+                        elements[i].color.opacity(0.22),
+                        style: StrokeStyle(lineWidth: 1, lineCap: .round)
+                    )
+                }
+
+                // ── 克 标签（分散在圆心附近四角）────────────
+                let keOffsets: [(CGFloat, CGFloat)] = [(0,-12),(10,4),(-10,4),(0,14),(-12,-4)]
+                ForEach(0..<5, id: \.self) { i in
+                    Text("克")
+                        .font(.system(size: 8.5, weight: .medium))
+                        .foregroundColor(elements[i].color.opacity(0.50))
+                        .position(x: cx + keOffsets[i].0, y: cy + keOffsets[i].1)
+                }
+
+                // ── 生-弧线（顺时针弧，从节点 i 到 i+1）────
+                ForEach(0..<5, id: \.self) { i in
+                    generationArc(i: i, cx: cx, cy: cy, arcR: arcR)
+                }
+
+                // ── 元素节点 ───────────────────────────────
+                ForEach(0..<5, id: \.self) { i in
+                    nodeView(i: i, cx: cx, cy: cy, R: R)
+                }
+
+                // ── 圆心：日主 ─────────────────────────────
+                dayMasterCenter
             }
-
-            // 4. 方位标签（跟随各段中点）
-            ForEach(0..<segments.count, id: \.self) { i in
-                let seg = segments[i]
-                let offset = labelOffset(start: seg.start, end: seg.end)
-                elementLabelView(element: seg.element, offset: offset)
-            }
-
-            // 5. 中心文字
-            centerLabel
         }
+        .opacity(appeared ? 1 : 0)
+        .scaleEffect(appeared ? 1 : 0.88)
         .onAppear {
-            withAnimation(Animation.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                glowing = true
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.75)) { appeared = true }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { pulse = true }
+        }
+    }
+
+    // MARK: - 生-弧（圆弧段 + "生"标签 + 箭头）
+    private func generationArc(i: Int, cx: CGFloat, cy: CGFloat, arcR: CGFloat) -> some View {
+        let startDeg = Double(i) * 72.0 - 90.0 + 13.0     // 留出节点间隙
+        let endDeg   = Double((i+1)%5) * 72.0 - 90.0 - 13.0
+        // endDeg 可能小于 startDeg（如 i=4 时 endDeg=-103, startDeg=211）
+        // 需要加 360 后再取中点，否则标签会跑到对面
+        let normEnd  = endDeg < startDeg ? endDeg + 360.0 : endDeg
+        let midDeg   = (startDeg + normEnd) / 2.0
+        let midRad   = midDeg * .pi / 180.0
+        let endRad   = endDeg * .pi / 180.0
+        let labelR   = arcR + 13
+
+        // 箭头尖端
+        let tipX = cx + arcR * CGFloat(cos(endRad))
+        let tipY = cy + arcR * CGFloat(sin(endRad))
+        // 顺时针切线方向 (−sinθ, cosθ)
+        let tx = CGFloat(-sin(endRad))
+        let ty = CGFloat( cos(endRad))
+        let wLen: CGFloat = 5.5
+        let wAngle = 0.45  // ~26°
+        let cw = CGFloat(cos(wAngle)), sw = CGFloat(sin(wAngle))
+        let w1 = CGPoint(x: tipX + wLen * ((-tx)*cw - (-ty)*sw), y: tipY + wLen * ((-tx)*sw + (-ty)*cw))
+        let w2 = CGPoint(x: tipX + wLen * ((-tx)*cw + (-ty)*sw), y: tipY + wLen * (-(-tx)*sw + (-ty)*cw))
+
+        let arcColor = Color(red: 0.55, green: 0.45, blue: 0.38).opacity(0.55)
+
+        return ZStack {
+            // 弧线
+            Path { p in
+                p.addArc(center: CGPoint(x: cx, y: cy), radius: arcR,
+                         startAngle: .degrees(startDeg),
+                         endAngle:   .degrees(endDeg),
+                         clockwise: false)
+            }
+            .stroke(arcColor, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+
+            // 箭头
+            Path { p in
+                p.move(to: w1)
+                p.addLine(to: CGPoint(x: tipX, y: tipY))
+                p.addLine(to: w2)
+            }
+            .stroke(arcColor, style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+
+            // "生" 标签
+            Text("生")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Color(red: 0.55, green: 0.45, blue: 0.38).opacity(0.7))
+                .position(
+                    x: cx + labelR * CGFloat(cos(midRad)),
+                    y: cy + labelR * CGFloat(sin(midRad))
+                )
+        }
+    }
+
+    // MARK: - 元素节点
+    private func nodeView(i: Int, cx: CGFloat, cy: CGFloat, R: CGFloat) -> some View {
+        let el    = elements[i]
+        let pt    = nodePos(i: i, cx: cx, cy: cy, R: R)
+        let isDM  = el == dayMasterEl
+        let v     = portrait.values[el] ?? 0
+
+        return ZStack {
+            // 日主外光环（脉冲）
+            if isDM {
+                Circle()
+                    .stroke(el.color.opacity(pulse ? 0.35 : 0.12), lineWidth: 2)
+                    .frame(width: 68, height: 68)
+                    .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: pulse)
+            }
+            // 节点圆
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [el.color.opacity(v > 0.22 ? 1.0 : 0.68),
+                                 el.color.opacity(v > 0.22 ? 0.78 : 0.48)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+                .shadow(color: el.color.opacity(0.25), radius: 6, x: 0, y: 3)
+
+            // 元素字 + 百分比
+            VStack(spacing: 1) {
+                Text(el.rawValue)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(.white)
+                Text("\(pct(el))%")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.88))
+            }
+
+            // 日主 Badge
+            if isDM {
+                Text("日主")
+                    .font(.system(size: 9, weight: .heavy))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Color(red: 0.08, green: 0.60, blue: 0.42), in: Capsule())
+                    .offset(y: 38)
             }
         }
+        .position(pt)
     }
 
-    // MARK: - 单段圆弧
-    private func segmentArc(index: Int) -> some View {
-        let seg = segments[index]
-        let isWeak = (values[seg.element] ?? 0) < 0.08
-        let gap = 0.006
-        let from = seg.start + gap / 2
-        let to   = max(seg.end - gap / 2, from + 0.001)
+    // MARK: - 圆心：日主
+    private var dayMasterCenter: some View {
+        let el = dayMasterEl
+        let ringColor = el?.color ?? Color.purple
+        return ZStack {
+            // 外柔光晕
+            Circle()
+                .fill(ringColor.opacity(pulse ? 0.12 : 0.05))
+                .frame(width: 90, height: 90)
+                .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: pulse)
 
-        return Circle()
-            .trim(from: from, to: to)
-            .stroke(
-                seg.element.color.opacity(isWeak ? 0.3 : 1.0),
-                style: StrokeStyle(
-                    lineWidth: 44, lineCap: .butt,
-                    dash: isWeak ? [6, 5] : []
-                )
-            )
-            .rotationEffect(.degrees(-90))
-            .padding(38)
-            .shadow(
-                color: (index == 0 ? seg.element.color.opacity(0.3) : .clear),
-                radius: 8
-            )
-    }
+            // 白底圆
+            Circle()
+                .fill(Color.white)
+                .frame(width: 72, height: 72)
+                .shadow(color: ringColor.opacity(0.18), radius: 10)
 
-    // MARK: - 元素标签
-    private func elementLabelView(element: FiveElement, offset: CGSize) -> some View {
-        let isDominant = element == dominantElement
-        return Text(isDominant ? "\(element.rawValue) (\(element.englishName))" : element.rawValue)
-            .font(isDominant ? .caption : .caption2)
-            .fontWeight(.semibold)
-            .foregroundColor(element.color)
-            .offset(offset)
-    }
+            // 彩色描边
+            Circle()
+                .stroke(ringColor, lineWidth: 2.2)
+                .frame(width: 72, height: 72)
 
-    // MARK: - 中心
-    private var centerLabel: some View {
-        let isDominant = (values[dominantElement] ?? 0) > 0.3
-        return VStack(spacing: 4) {
-            Text(isDominant ? "强\(dominantElement.rawValue)" : "中和")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundColor(.purple)
-            Text(isDominant ? "能量过旺" : "平衡佳境")
-                .font(.caption).foregroundColor(.secondary)
+            // 日主文字
+            VStack(spacing: 2) {
+                if portrait.dayMaster.isEmpty {
+                    Text("命局")
+                        .font(.system(size: 16, weight: .heavy))
+                        .foregroundColor(.purple)
+                } else {
+                    Text(portrait.dayMaster)
+                        .font(.system(size: 18, weight: .heavy))
+                        .foregroundColor(ringColor)
+                    Text("日主")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+            }
         }
-        .frame(width: 120, height: 120)
-        .background(Color(.systemBackground).opacity(0.95))
-        .clipShape(Circle())
-        .shadow(color: dominantElement.color.opacity(0.15), radius: 10)
     }
 }
 

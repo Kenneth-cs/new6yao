@@ -14,6 +14,7 @@ struct DecisionScenario: Identifiable {
 // MARK: - 五行场景选择页
 struct ScenarioSelectionView: View {
     let portrait: EnergyPortraitResult   // 从 EnergyPortraitView 传入
+    @Environment(\.dismiss) private var dismiss
 
     @State private var selectedScenario: DecisionScenario? = nil
     @State private var optionInputs: [String] = [""]
@@ -55,9 +56,17 @@ struct ScenarioSelectionView: View {
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selectedScenario?.id)
         }
-        .navigationTitle("五行场景选择")
+        .navigationTitle("场景选择")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .fontWeight(.semibold)
+                        .foregroundColor(.purple)
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {}) {
                     Image(systemName: "info.circle")
@@ -264,11 +273,14 @@ struct ScenarioSelectionView: View {
     }
 
     private func optionInputRow(index: Int) -> some View {
-        HStack(spacing: 10) {
-            Text("Option \(index + 1)")
+        let chineseNums = ["一", "二", "三"]
+        let label = "选项\(chineseNums[safe: index] ?? "\(index + 1)")"
+        return HStack(spacing: 10) {
+            Text(label)
                 .font(.caption2).fontWeight(.bold)
-                .foregroundColor(.secondary)
-                .frame(width: 60, alignment: .leading)
+                .foregroundColor(.white)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Color.purple.opacity(0.75), in: Capsule())
             TextField(selectedScenario?.inputPlaceholder ?? "输入选项名称", text: $optionInputs[index])
                 .font(.subheadline)
                 .padding(.horizontal, 12).padding(.vertical, 10)
@@ -352,6 +364,12 @@ struct CustomScenarioCard: View {
             .shadow(color: .black.opacity(0.03), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
