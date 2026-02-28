@@ -42,7 +42,7 @@ struct MainTabView: View {
             
             // Tab 4: 决策矩阵（新功能占位）
             NavigationStack {
-                MatrixPlaceholderView()
+                EnergyPortraitView()
             }
             .tabItem {
                 Label("决策", systemImage: "square.grid.3x3.fill")
