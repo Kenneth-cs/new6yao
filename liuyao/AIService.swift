@@ -557,6 +557,74 @@ class AIService: ObservableObject {
             throw AIServiceError.requestFailed(error)
         }
     }
+
+    // MARK: - 五行决策矩阵 V2（丰富版，含落地建议/决策延伸/矩阵表格）
+
+    private let matrixV2SystemPrompt = """
+    你是一个专业的五行决策分析引擎，擅长用"底层逻辑 + 实战矩阵 + 落地建议"三段式输出决策报告。
+    你的唯一职责是：根据用户命局和决策选项，输出一份结构完整、内容具体的决策矩阵 JSON。
+    【铁律】：
+    1. 只输出一个合法 JSON 对象，绝对不输出任何解释、前缀、后缀、markdown 代码块
+    2. score 必须是 0~100 的整数，所有选项分数不能完全相同
+    3. matrixRows 中 type 只能是：benefit / consumption / danger / neutral
+    4. label 字段在 options 层级只能是：优选 / 可选 / 淘汰（有且只有一个"优选"）
+    5. dimensions 数组与每个选项的 matrixRows 长度必须相同（3个维度）
+    6. extensions 必须包含 2~3 条具体、有操作价值的延伸分析
+    7. actionPlan 的每个字段都必须具体（不得使用通用模板语言）
+    8. fiveElementAnalysis 必须结合用户命局特点解释判断逻辑（50~100字）
+    """
+
+    /// 根据命局画像 + 决策选项，输出 V2 丰富版决策矩阵
+    func analyzeDecisionMatrixV2(
+        portrait: EnergyPortraitResult,
+        options:  [String],
+        scenario: String,
+        question: String
+    ) async throws -> DecisionMatrixResultV2 {
+        let labels = ["A", "B", "C", "D", "E"]
+        let optionList = options.enumerated()
+            .map { "选项\(labels[$0.offset])：\($0.element)" }
+            .joined(separator: "\n")
+
+        let prompt = """
+        用户命局：
+        - 日主：\(portrait.dayMaster)
+        - 喜用（药）：\(portrait.favorableElements.joined(separator: "、"))
+        - 忌神（病）：\(portrait.unfavorableElements.joined(separator: "、"))
+        - 命局摘要：\(portrait.diagnosis)
+
+        决策背景：
+        - 场景：\(scenario)
+        - 问题：\(question)
+
+        待分析选项：
+        \(optionList)
+
+        评分规则：大吉≥85，小吉70~84，平50~69，小凶30~49，大凶<30
+        一票否决：若某选项核心属性直接命中忌神，hasFatalRisk=true，并在 fatalRiskDetail 中说明
+
+        三才维度：请动态生成 3 个最贴近用户问题的维度（不要照搬"地利/人和/天时"，除非真的最合适）。
+        维度选取参考：
+        - 选职业：企业文化、业务方向、入职时机
+        - 选投资：行业属性、资金流动性、入场时机
+        - 选房产：地理位置、楼层户型、装修风格
+        - 选合作：对方五行、合作方式、合约时机
+
+        落地建议要求（actionPlan）：
+        - timing：具体月份/节气/农历时机（如"宜农历亥月签约"）
+        - approach：针对此场景的具体行动策略（不是泛泛而谈）
+        - avoid：明确说出要避开什么人/事/物/时机
+        - compensation：如何用五行调候物或行为来强化选中选项的能量
+
+        决策延伸（extensions）：2~3条，分析"如果选项劣势明显时怎么补救"或"长期主义视角下的权衡"
+
+        输出 JSON（严格按此结构，无任何额外内容）：
+        {"verdict":"优选A","verdictReason":"30字内核心原因","options":[{"name":"选项A","score":85,"verdict":"大吉","label":"优选","elements":["水","木"],"matrixRows":[{"dimension":"维度1","type":"benefit","label":"补水木","detail":"一句话说明"},{"dimension":"维度2","type":"benefit","label":"耗土","detail":"一句话说明"},{"dimension":"维度3","type":"consumption","label":"中性","detail":"一句话说明"}],"summary":"30字内总结"}],"dimensions":["维度1","维度2","维度3"],"extensions":["延伸分析1","延伸分析2"],"actionPlan":{"timing":"具体时机","approach":"具体行动","avoid":"具体规避","compensation":"具体补偿"},"fiveElementAnalysis":"结合命局的五行分析说明（50~100字）","hasFatalRisk":false,"fatalRiskDetail":""}
+        """
+
+        let rawContent = try await getMatrixAIResponse(system: matrixV2SystemPrompt, prompt: prompt)
+        return try parseMatrixJSON(from: rawContent, as: DecisionMatrixResultV2.self)
+    }
 }
 
 // ============================================================

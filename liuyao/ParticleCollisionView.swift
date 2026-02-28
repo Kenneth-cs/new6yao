@@ -23,7 +23,7 @@ struct ParticleCollisionView: View {
     @State private var floatingDots: [FloatingDot] = []
 
     // ── AI 分析状态 ──
-    @State private var matrixResult: DecisionMatrixResult? = nil
+    @State private var matrixResultV2: DecisionMatrixResultV2? = nil
     @State private var animationDone = false   // 动画进度完成标志
 
     // 五行生克关系浮标（静态定义）
@@ -65,11 +65,11 @@ struct ParticleCollisionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .navigationDestination(isPresented: $navigateToResult) {
-            MatrixResultView(
+            MatrixResultViewB(
                 scenario: scenario,
                 question: question,
                 options: options,
-                matrixResult: matrixResult
+                matrixResult: matrixResultV2
             )
         }
         .onAppear {
@@ -231,7 +231,7 @@ struct ParticleCollisionView: View {
 
     // MARK: - 底部完成提示卡（固定，非弹出层）
     private var completionCard: some View {
-        let winner = matrixResult?.recommendedOption ?? matrixResult?.options.first
+        let winner = matrixResultV2?.recommendedOption
         let score = winner?.score ?? 0
         let verdict = winner?.verdict ?? "吉"
         
@@ -276,9 +276,9 @@ struct ParticleCollisionView: View {
                 Text("冲突检测！高风险！")
                     .font(.headline).fontWeight(.bold).foregroundColor(.white)
             }
-            Text(matrixResult?.fatalRiskReason.isEmpty == false
-                 ? matrixResult!.fatalRiskReason
-                 : "在订：强力冲突，动摇根基，需谨慎抉择非吉之灶。\n建议暂缓行动或寻求化解方案。")
+            Text(matrixResultV2?.fatalRiskDetail.isEmpty == false
+                 ? matrixResultV2!.fatalRiskDetail
+                 : "检测到强力冲突，动摇根基，需谨慎抉择。\n建议暂缓行动或寻求化解方案。")
                 .font(.subheadline).foregroundColor(Color.white.opacity(0.75))
                 .multilineTextAlignment(.center).lineSpacing(4)
             Button(action: { navigateToResult = true }) {
@@ -336,21 +336,21 @@ struct ParticleCollisionView: View {
 
         Task {
             do {
-                let result = try await AIService.shared.analyzeDecisionMatrix(
+                let resultV2 = try await AIService.shared.analyzeDecisionMatrixV2(
                     portrait: portrait,
                     options: validOptions,
                     scenario: scenarioName,
                     question: question
                 )
                 await MainActor.run {
-                    matrixResult = result
-                    print("[ParticleCollisionView] AI 分析完成，推荐: \(result.recommendation)")
+                    matrixResultV2 = resultV2
+                    print("[ParticleCollisionView] AI 分析完成，推荐: \(resultV2.verdict)")
                     tryNavigateToResult()
                 }
             } catch {
                 await MainActor.run {
                     print("[ParticleCollisionView] AI 分析失败，使用 Mock: \(error)")
-                    matrixResult = .mock
+                    matrixResultV2 = .mock
                     tryNavigateToResult()
                 }
             }
@@ -359,21 +359,16 @@ struct ParticleCollisionView: View {
 
     // MARK: - 等待动画 + AI 都完成后跳转
     private func tryNavigateToResult() {
-        guard animationDone, matrixResult != nil else { return }
+        guard animationDone, matrixResultV2 != nil else { return }
 
-        let hasFatal = matrixResult?.hasFatalRisk ?? false
+        let hasFatal = matrixResultV2?.hasFatalRisk ?? false
         if hasFatal {
             withAnimation { progressText = "⚡ 检测到强力冲突！" }
             withAnimation(.spring(response: 0.5)) { showWarning = true }
             warningPulse = true
-            // 警告展示 3s 后允许用户自行点击或自动跳转
         } else {
             withAnimation { progressText = "✅ 分析完成" }
             withAnimation(.spring(response: 0.5)) { showCompletion = true }
-            // 移除自动跳转，等待用户点击
-            // DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            //    navigateToResult = true
-            // }
         }
     }
 
