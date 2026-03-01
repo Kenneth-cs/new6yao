@@ -218,23 +218,23 @@ struct NotificationSettingsView: View {
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.secondary)
-                            
+
                             Spacer()
-                            
+
                             Text("现在")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
-                        
-                        Text("💡 每日觉察")
+
+                        Text(DailyNotificationContentService.shared.cachedTitle)
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
-                        
-                        Text("答案不在卦象里，而在你心里。让六爻做你的镜子，照见本心。")
+
+                        Text(DailyNotificationContentService.shared.cachedBody)
                             .font(.caption)
                             .foregroundColor(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(3)
                     }
                 }
                 .padding()

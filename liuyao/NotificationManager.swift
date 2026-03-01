@@ -114,48 +114,50 @@ class NotificationManager: NSObject, ObservableObject {
     
     // MARK: - 每日提醒
     
-    /// 安排每日提醒
+    /// 安排每日提醒（使用动态文案）
     func scheduleDailyReminder() {
         guard isAuthorized else {
             print("⚠️ 未授权通知权限，无法安排提醒")
             requestAuthorization { [weak self] granted in
-                if granted {
-                    self?.scheduleDailyReminder()
-                }
+                if granted { self?.scheduleDailyReminder() }
             }
             return
         }
-        
-        // 先取消现有的提醒
+        // 取动态文案（有缓存用缓存，否则用本地兜底）
+        let svc = DailyNotificationContentService.shared
+        let title = svc.cachedTitle
+        let body  = svc.cachedBody
+        scheduleWith(title: title, body: body)
+    }
+
+    /// 用指定文案更新明日通知（AI 生成后调用）
+    func updateContent(title: String, body: String) {
+        guard dailyReminderEnabled else { return }
+        scheduleWith(title: title, body: body)
+        print("🔔 通知文案已更新: \(title)")
+    }
+
+    /// 内部通用调度
+    private func scheduleWith(title: String, body: String) {
         cancelDailyReminder()
-        
-        // 创建通知内容
+
         let content = UNMutableNotificationContent()
-        
-        // 随机选择一条消息
-        let message = dailyMessages.randomElement() ?? dailyMessages[0]
-        content.title = message.title
-        content.body = message.body
+        content.title = title
+        content.body  = body
         content.sound = .default
         content.badge = 1
-        
-        // 添加自定义数据
         content.userInfo = ["type": "dailyReminder"]
-        
-        // 创建触发器 - 每天指定时间
+
         var dateComponents = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
         dateComponents.second = 0
-        
+
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        
-        // 创建请求
         let request = UNNotificationRequest(
             identifier: dailyReminderIdentifier,
             content: content,
             trigger: trigger
         )
-        
-        // 添加通知
+
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
                 print("❌ 安排通知失败: \(error.localizedDescription)")

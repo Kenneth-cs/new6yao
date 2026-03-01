@@ -95,7 +95,7 @@ struct SubscriptionPromptView: View {
             
             // 特色功能列表
             VStack(alignment: .leading, spacing: 12) {
-                featureItem("无限次AI决策分析", icon: "sparkles")
+                featureItem("无限次AI摇卦分析", icon: "sparkles")
                 featureItem("无限使用思维工具", icon: "square.grid.2x2")
                 featureItem("无限保存历史记录", icon: "clock.arrow.circlepath")
             }

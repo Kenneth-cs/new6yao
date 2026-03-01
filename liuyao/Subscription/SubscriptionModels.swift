@@ -73,7 +73,8 @@ enum SubscriptionTier: String, Codable {
         switch self {
         case .free:
             return [
-                "决策分析：每天 1 次",
+                "摇卦分析：每天 1 次",
+                "五行矩阵分析：每天 1 次",
                 "SWOT分析：每月 10 次",
                 "决策矩阵：每月 10 次",
                 "学习中心：完整访问",
@@ -81,7 +82,8 @@ enum SubscriptionTier: String, Codable {
             ]
         case .proMonthly, .proYearly:
             return [
-                "决策分析：无限次数",
+                "摇卦分析：无限次数",
+                "五行矩阵分析：无限次数",
                 "SWOT分析：无限次数",
                 "决策矩阵：无限次数",
                 "学习中心：完整访问",
@@ -271,7 +273,7 @@ struct UsageStatistics: Codable {
 
 // MARK: - 功能权限类型
 enum FeaturePermission {
-    case divination        // 决策分析
+    case divination        // 摇卦分析
     case swot              // SWOT分析
     case matrix            // 决策矩阵
     case historyRecords    // 历史记录
@@ -279,7 +281,7 @@ enum FeaturePermission {
     var displayName: String {
         switch self {
         case .divination:
-            return "决策分析"
+            return "摇卦分析"
         case .swot:
             return "SWOT分析"
         case .matrix:
@@ -305,7 +307,7 @@ enum FeaturePermission {
     var description: String {
         switch self {
         case .divination:
-            return "基于六爻框架的AI决策分析"
+            return "基于六爻框架的AI摇卦分析"
         case .swot:
             return "结构化问题分析工具"
         case .matrix:
@@ -342,7 +344,7 @@ enum SubscriptionPromptTrigger {
     var message: String {
         switch self {
         case .dailyLimitReached:
-            return "升级专业版，享受无限次AI决策分析"
+            return "升级专业版，享受无限次AI摇卦分析"
         case .swotLimitReached:
             return "升级专业版，无限使用SWOT分析工具"
         case .matrixLimitReached:
@@ -378,10 +380,16 @@ struct FeatureComparisonItem {
 extension FeatureComparisonItem {
     static let allFeatures: [FeatureComparisonItem] = [
         FeatureComparisonItem(
-            name: "决策分析",
+            name: "摇卦分析",
             freeDescription: "每天 1 次",
             proDescription: "无限次数",
             icon: "sparkles"
+        ),
+        FeatureComparisonItem(
+            name: "五行矩阵分析",
+            freeDescription: "每天 1 次",
+            proDescription: "无限次数",
+            icon: "circle.hexagongrid.fill"
         ),
         FeatureComparisonItem(
             name: "SWOT分析",

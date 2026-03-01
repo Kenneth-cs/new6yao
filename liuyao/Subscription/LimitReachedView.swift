@@ -51,7 +51,7 @@ struct LimitReachedView: View {
         var message: String {
             switch self {
             case .dailyDivination:
-                return "免费版用户每天可以进行1次决策分析"
+                return "免费版用户每天可以进行1次摇卦分析"
             case .monthlySWOT:
                 return "免费版用户每月可以使用10次SWOT分析"
             case .monthlyMatrix:
@@ -207,7 +207,7 @@ struct LimitReachedView: View {
                 .fontWeight(.bold)
             
             VStack(alignment: .leading, spacing: 12) {
-                featureItem("无限次AI决策分析", icon: "sparkles", color: .purple)
+                featureItem("无限次AI摇卦分析", icon: "sparkles", color: .purple)
                 featureItem("无限使用思维工具", icon: "square.grid.2x2", color: .blue)
                 featureItem("无限保存历史记录", icon: "clock.arrow.circlepath", color: .green)
             }

@@ -15,6 +15,7 @@ struct MatrixDecisionRecord: Codable, Identifiable {
     let recommendedName:  String   // 推荐选项名，如"选项A"
     let score:            Int      // 推荐选项分数 0~100
     let verdictLabel:     String   // 大吉/小吉/平/小凶/大凶
+    let fullResult:       DecisionMatrixResultV2?  // 完整报告（旧记录为 nil）
 
     /// 吉凶颜色（用于 UI 展示）
     var verdictColor: Color {
@@ -101,5 +102,6 @@ extension MatrixDecisionRecord {
         self.recommendedName = winner?.name ?? (options.first ?? "—")
         self.score           = winner?.score ?? 0
         self.verdictLabel    = winner?.verdict ?? "—"
+        self.fullResult      = result  // 保存完整报告供历史回顾
     }
 }

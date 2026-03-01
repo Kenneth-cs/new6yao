@@ -1,6 +1,17 @@
 import SwiftUI
 import CoreData
 
+// MARK: - 日期数字格式化辅助
+private let numericDateFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy/MM/dd"
+    return f
+}()
+
+extension Date {
+    var numericString: String { numericDateFormatter.string(from: self) }
+}
+
 struct HistoryPageView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var dataService = DataService()
@@ -159,6 +170,33 @@ struct MatrixHistoryCardView: View {
     let onDelete: () -> Void
 
     var body: some View {
+        Group {
+            if let full = record.fullResult {
+                // 有完整报告 → 可跳转详情
+                NavigationLink(destination:
+                    MatrixResultViewB(
+                        scenario: nil,
+                        question: record.question,
+                        options:  record.options,
+                        matrixResult: full
+                    )
+                ) {
+                    cardContent
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                // 旧记录无完整数据 → 仅展示摘要，不可跳转
+                cardContent
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive, action: onDelete) {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: record.scenarioIcon)
@@ -197,7 +235,11 @@ struct MatrixHistoryCardView: View {
                     .background(Color.indigo.opacity(0.08))
                     .cornerRadius(6)
                 Spacer()
-                Text(record.date, style: .date)
+                if record.fullResult != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2).foregroundColor(.secondary)
+                }
+                Text(record.date.numericString)
                     .font(.caption2).foregroundColor(.secondary)
             }
         }
@@ -207,11 +249,6 @@ struct MatrixHistoryCardView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: Color.indigo.opacity(0.08), radius: 8, x: 0, y: 3)
         )
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive, action: onDelete) {
-                Label("删除", systemImage: "trash")
-            }
-        }
     }
 }
 

@@ -54,9 +54,6 @@ struct EnergyPortraitView: View {
     // AI 分析状态
     @State private var isAnalyzing = false
     @State private var analyzeError: String? = nil
-    // 加载动效
-    @State private var loadingStep: Int = 0       // 当前推进到哪一步
-    @State private var loadingPulse: Bool = false // 中心图标呼吸
 
     // 便于在 body 中判断是否已设置生辰
     private var hasBirthday: Bool { BirthInfoStore.shared.hasSetBirthday }
@@ -68,8 +65,8 @@ struct EnergyPortraitView: View {
             if hasBirthday || portrait != nil {
                 // ── 已设置生辰：主内容 ──────────────────────────
                 if isAnalyzing {
-                    // 全屏加载进度
-                    analyzeFullScreenLoading
+                    // 空占位，加载蒙层由外层 ZStack 统一覆盖
+                    Color.clear
                 } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
@@ -141,6 +138,12 @@ struct EnergyPortraitView: View {
             birthdayPickerSheet
         }
         .onAppear { loadOnAppear() }
+        // ── 加载蒙层：无论哪个状态都能正确覆盖 ──────────────────
+        .overlay {
+            if isAnalyzing {
+                simpleLoadingOverlay
+            }
+        }
     }
 
     // MARK: - 启动时加载逻辑
@@ -209,148 +212,32 @@ struct EnergyPortraitView: View {
         return f.string(from: selectedBirthday)
     }
 
-    // MARK: - 全屏加载进度页
-    private var analyzeFullScreenLoading: some View {
-        let steps: [(icon: String, title: String, desc: String)] = [
-            ("calendar.badge.clock", "解析八字命盘", "正在计算天干地支…"),
-            ("sparkles",             "AI 推算五行",  "深度推演命局能量…"),
-            ("circle.hexagongrid",   "生成能量画像",  "绘制专属五行画像…")
-        ]
-        return ZStack {
-            // 渐变背景
-            LinearGradient(
-                colors: [
-                    Color(red: 0.14, green: 0.10, blue: 0.28),
-                    Color(red: 0.22, green: 0.16, blue: 0.40),
-                    Color(red: 0.14, green: 0.10, blue: 0.28)
-                ],
-                startPoint: .topLeading, endPoint: .bottomTrailing
+    // MARK: - 加载蒙层（简单，叠在最外层保证可见）
+    private var simpleLoadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.6)
+                    .tint(.white)
+                Text("AI 推算命局中…")
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(.white)
+                Text("约需 10～20 秒，请稍候")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 36)
+            .padding(.vertical, 28)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color(red: 0.18, green: 0.12, blue: 0.32).opacity(0.95))
             )
-            .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                // 中心脉动图标
-                ZStack {
-                    ForEach(0..<3, id: \.self) { i in
-                        Circle()
-                            .stroke(
-                                Color.purple.opacity(0.35 - Double(i) * 0.10),
-                                lineWidth: 1.5
-                            )
-                            .frame(width: CGFloat(72 + i * 28), height: CGFloat(72 + i * 28))
-                            .scaleEffect(loadingPulse ? 1.12 : 0.95)
-                            .animation(
-                                .easeInOut(duration: 1.4).repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.25),
-                                value: loadingPulse
-                            )
-                    }
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(red: 0.58, green: 0.38, blue: 0.92),
-                                             Color(red: 0.38, green: 0.58, blue: 0.92)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 68, height: 68)
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 28, weight: .light))
-                            .foregroundColor(.white)
-                    }
-                    .scaleEffect(loadingPulse ? 1.06 : 1.0)
-                    .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true),
-                               value: loadingPulse)
-                }
-                .padding(.bottom, 40)
-
-                // 标题
-                VStack(spacing: 6) {
-                    Text("正在推算你的命局")
-                        .font(.title3).fontWeight(.semibold)
-                        .foregroundColor(.white)
-                    Text("约需 10~20 秒，请稍候")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                .padding(.bottom, 44)
-
-                // 步骤列表
-                VStack(spacing: 0) {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { idx, step in
-                        HStack(spacing: 16) {
-                            // 状态圆
-                            ZStack {
-                                Circle()
-                                    .fill(idx < loadingStep
-                                          ? Color(red: 0.48, green: 0.82, blue: 0.62)
-                                          : (idx == loadingStep
-                                             ? Color(red: 0.58, green: 0.38, blue: 0.92)
-                                             : Color.white.opacity(0.12)))
-                                    .frame(width: 36, height: 36)
-                                if idx < loadingStep {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(.white)
-                                } else if idx == loadingStep {
-                                    ProgressView()
-                                        .scaleEffect(0.75)
-                                        .tint(.white)
-                                } else {
-                                    Image(systemName: step.icon)
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.4))
-                                }
-                            }
-
-                            // 文字
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(step.title)
-                                    .font(.subheadline).fontWeight(.medium)
-                                    .foregroundColor(idx <= loadingStep ? .white : .white.opacity(0.35))
-                                Text(step.desc)
-                                    .font(.caption)
-                                    .foregroundColor(idx == loadingStep
-                                                     ? Color(red: 0.78, green: 0.68, blue: 1.0)
-                                                     : .white.opacity(0.25))
-                            }
-                            Spacer()
-                        }
-                        .padding(.horizontal, 36)
-                        .padding(.vertical, 14)
-
-                        // 竖线连接
-                        if idx < steps.count - 1 {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.12))
-                                .frame(width: 1.5, height: 20)
-                                .offset(x: -UIScreen.main.bounds.width / 2 + 54)
-                        }
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color.white.opacity(0.06))
-                )
-                .padding(.horizontal, 24)
-
-                Spacer()
-            }
         }
-        .onAppear {
-            loadingStep = 0
-            loadingPulse = true
-            // 每隔 ~6 秒推进一步（AI 通常 10-20s 完成）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                withAnimation(.easeInOut(duration: 0.4)) { loadingStep = 1 }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
-                withAnimation(.easeInOut(duration: 0.4)) { loadingStep = 2 }
-            }
-        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: isAnalyzing)
     }
 
 

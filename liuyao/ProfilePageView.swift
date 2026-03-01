@@ -88,34 +88,66 @@ struct ProfilePageView: View {
 
 // MARK: - 用户信息区域
 struct UserInfoSection: View {
+    // 开发者模式激活逻辑
+    @State private var tapCount: Int = 0
+    @State private var lastTapTime: Date = .distantPast
+    @State private var showDevSheet = false
+    @AppStorage("dev_mode_enabled") private var devModeEnabled = false
+
     var body: some View {
         VStack(spacing: 16) {
-            // 头像
+            // 头像（连点6次进入开发者模式）
             ZStack {
+                // 底圆（居中）
                 Circle()
                     .fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [.purple.opacity(0.8), .indigo.opacity(0.6)]),
+                            gradient: Gradient(colors: devModeEnabled
+                                ? [.orange.opacity(0.85), .red.opacity(0.7)]
+                                : [.purple.opacity(0.8), .indigo.opacity(0.6)]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 80, height: 80)
-                
+
+                // 人像图标（居中）
                 Image(systemName: "person.fill")
                     .font(.system(size: 40))
                     .foregroundColor(.white)
+
+                // 开发者模式徽章（右上角独立叠加）
+                if devModeEnabled {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                        .padding(5)
+                        .background(Color.orange, in: Circle())
+                        .frame(width: 80, height: 80, alignment: .topTrailing)
+                }
             }
-            
+            .onTapGesture {
+                handleAvatarTap()
+            }
+
             VStack(spacing: 4) {
-                Text("人生用户")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                
-                Text("探索人生的智慧")
+                HStack(spacing: 6) {
+                    Text("人生用户")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    if devModeEnabled {
+                        Text("DEV")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Color.orange, in: Capsule())
+                    }
+                }
+
+                Text(devModeEnabled ? "开发者模式已开启" : "探索人生的智慧")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(devModeEnabled ? .orange : .secondary)
             }
         }
         .padding(.vertical, 20)
@@ -125,6 +157,144 @@ struct UserInfoSection: View {
                 .fill(Color(.secondarySystemBackground))
                 .shadow(color: Color.primary.opacity(0.1), radius: 8, x: 0, y: 4)
         )
+        .sheet(isPresented: $showDevSheet) {
+            DeveloperModeSheet(isEnabled: $devModeEnabled)
+        }
+    }
+
+    private func handleAvatarTap() {
+        let now = Date()
+        if now.timeIntervalSince(lastTapTime) > 2 {
+            tapCount = 0
+        }
+        tapCount += 1
+        lastTapTime = now
+
+        if tapCount >= 6 {
+            tapCount = 0
+            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            showDevSheet = true
+        }
+    }
+}
+
+// MARK: - 开发者模式面板
+struct DeveloperModeSheet: View {
+    @Binding var isEnabled: Bool
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var pm = PermissionManager.shared
+
+    @State private var toast: String? = nil
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // 开关
+                Section {
+                    Toggle(isOn: $isEnabled) {
+                        Label("开发者模式", systemImage: "wrench.and.screwdriver.fill")
+                            .foregroundColor(.orange)
+                    }
+                    .tint(.orange)
+                } header: {
+                    Text("模式开关")
+                } footer: {
+                    Text("开启后头像变为橙色，顶栏显示 DEV 标识")
+                }
+
+                // 使用次数调试
+                Section {
+                    // 当前状态
+                    statusRow("摇卦今日已用",
+                              value: "\(pm.usageStats.dailyDivinationCount) / \(pm.usageQuota.dailyDivinationLimit)",
+                              color: .purple)
+                    statusRow("五行决策今日已用",
+                              value: "\(pm.usageStats.dailyFiveElementCount) / \(pm.usageQuota.dailyFiveElementLimit)",
+                              color: .indigo)
+                    statusRow("SWOT 本月已用",
+                              value: "\(pm.usageStats.monthlySWOTCount) / \(pm.usageQuota.monthlySWOTLimit)",
+                              color: .blue)
+                    statusRow("矩阵本月已用",
+                              value: "\(pm.usageStats.monthlyMatrixCount) / \(pm.usageQuota.monthlyMatrixLimit)",
+                              color: .green)
+                } header: {
+                    Text("当前使用量")
+                }
+
+                // 操作按钮
+                Section {
+                    Button {
+                        pm.devResetAllCounts()
+                        showToast("✅ 已重置所有计数")
+                    } label: {
+                        Label("重置所有次数（归零）", systemImage: "arrow.counterclockwise.circle.fill")
+                            .foregroundColor(.green)
+                    }
+
+                    Button {
+                        pm.devFillAllCounts()
+                        showToast("⚠️ 已用尽所有次数")
+                    } label: {
+                        Label("填满次数（模拟用尽）", systemImage: "exclamationmark.circle.fill")
+                            .foregroundColor(.orange)
+                    }
+
+                    Button {
+                        pm.simulateUpgradeToPro()
+                        showToast("🎉 已切换为专业版")
+                    } label: {
+                        Label("模拟专业版", systemImage: "crown.fill")
+                            .foregroundColor(.yellow)
+                    }
+
+                    Button {
+                        pm.simulateDowngradeToFree()
+                        showToast("⬇️ 已切换为免费版")
+                    } label: {
+                        Label("模拟免费版", systemImage: "person.fill")
+                            .foregroundColor(.gray)
+                    }
+                } header: {
+                    Text("调试操作")
+                } footer: {
+                    Text("以上操作仅修改本地缓存，不影响真实订阅状态")
+                }
+            }
+            .navigationTitle("🔧 开发者模式")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if let msg = toast {
+                    Text(msg)
+                        .font(.subheadline).fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20).padding(.vertical, 12)
+                        .background(Color.black.opacity(0.75), in: Capsule())
+                        .padding(.bottom, 30)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: toast)
+        }
+    }
+
+    private func statusRow(_ title: String, value: String, color: Color) -> some View {
+        HStack {
+            Text(title).foregroundColor(.primary)
+            Spacer()
+            Text(value).font(.subheadline).fontWeight(.semibold).foregroundColor(color)
+        }
+    }
+
+    private func showToast(_ msg: String) {
+        toast = msg
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation { toast = nil }
+        }
     }
 }
 
@@ -308,7 +478,7 @@ private struct MatrixHistoryRow: View {
                     Text(record.scenario)
                         .font(.caption2).foregroundColor(.secondary)
                     Spacer()
-                    Text(record.date, style: .date)
+                    Text(record.date.numericString)
                         .font(.caption2).foregroundColor(.secondary)
                 }
             }
@@ -342,7 +512,7 @@ private struct DivinationHistoryRow: View {
                         .background(Color.purple.opacity(0.10))
                         .foregroundColor(.purple).cornerRadius(4)
                     if let date = record.createdAt {
-                        Text(date, style: .date).font(.caption2).foregroundColor(.secondary)
+                        Text(date.numericString).font(.caption2).foregroundColor(.secondary)
                     }
                 }
             }
@@ -1717,7 +1887,7 @@ struct SubscriptionStatusCard: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                         UsageQuickStat(
                             icon: "sparkles",
-                            title: "问卦",
+                            title: "摇卦",
                             value: "\(permissionManager.getDailyDivinationRemaining())",
                             subtitle: "今日剩余",
                             color: .purple

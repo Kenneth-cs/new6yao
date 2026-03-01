@@ -387,10 +387,33 @@ class PermissionManager: ObservableObject {
         """)
     }
     
-    // MARK: - 测试辅助方法
-    
-    #if DEBUG
-    /// 模拟升级到专业版（仅测试使用）
+    // MARK: - 开发者模式辅助方法
+
+    /// 重置所有使用计数为 0（开发者调试用）
+    func devResetAllCounts() {
+        usageStats.dailyDivinationCount   = 0
+        usageStats.monthlySWOTCount       = 0
+        usageStats.monthlyMatrixCount     = 0
+        usageStats.dailyFiveElementCount  = 0
+        saveUsageStatistics()
+        objectWillChange.send()
+        print("🔧 [Dev] 已重置所有使用计数")
+    }
+
+    /// 把所有计数推满（模拟用尽所有次数）
+    func devFillAllCounts() {
+        usageStats.dailyDivinationCount   = usageQuota.dailyDivinationLimit
+        usageStats.monthlySWOTCount       = usageQuota.monthlySWOTLimit
+        usageStats.monthlyMatrixCount     = usageQuota.monthlyMatrixLimit
+        usageStats.dailyFiveElementCount  = usageQuota.dailyFiveElementLimit
+        saveUsageStatistics()
+        objectWillChange.send()
+        print("🔧 [Dev] 已填满所有使用计数")
+    }
+
+    // MARK: - 测试辅助方法（开发者模式可调用）
+
+    /// 模拟升级到专业版
     func simulateUpgradeToPro() {
         updateSubscriptionTier(.proMonthly)
         subscriptionStatus = SubscriptionStatus(
@@ -402,26 +425,27 @@ class PermissionManager: ObservableObject {
         )
         print("🎉 已模拟升级到专业版")
     }
-    
-    /// 模拟降级到免费版（仅测试使用）
+
+    /// 模拟降级到免费版
     func simulateDowngradeToFree() {
         updateSubscriptionTier(.free)
         subscriptionStatus = nil
         print("⬇️ 已模拟降级到免费版")
     }
-    
-    /// 清除所有数据（仅测试使用）
+
+    #if DEBUG
+    /// 清除所有数据（仅 DEBUG 使用）
     func clearAllData() {
         userDefaults.removeObject(forKey: SubscriptionConfig.UserDefaultsKeys.subscriptionTier)
         userDefaults.removeObject(forKey: SubscriptionConfig.UserDefaultsKeys.subscriptionStatus)
         userDefaults.removeObject(forKey: SubscriptionConfig.UserDefaultsKeys.usageStatistics)
         userDefaults.removeObject(forKey: SubscriptionConfig.UserDefaultsKeys.lastPromptTime)
-        
+
         currentTier = .free
         subscriptionStatus = nil
         usageStats = UsageStatistics()
         updateQuota(for: .free)
-        
+
         print("🗑️ 已清除所有订阅数据")
     }
     #endif

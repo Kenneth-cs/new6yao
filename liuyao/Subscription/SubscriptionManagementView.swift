@@ -118,14 +118,24 @@ struct SubscriptionManagementView: View {
     
     private var usageStatisticsSection: some View {
         Section {
-            // 问卦使用情况
+            // 摇卦使用情况
             UsageRow(
                 icon: "sparkles",
-                title: "决策分析",
+                title: "摇卦分析",
                 used: permissionManager.usageStats.dailyDivinationCount,
                 limit: permissionManager.usageQuota.dailyDivinationLimit,
                 period: "今日",
                 color: .purple
+            )
+
+            // 五行矩阵分析使用情况
+            UsageRow(
+                icon: "circle.hexagongrid.fill",
+                title: "五行矩阵分析",
+                used: permissionManager.usageStats.dailyFiveElementCount,
+                limit: permissionManager.usageQuota.dailyFiveElementLimit,
+                period: "今日",
+                color: .indigo
             )
             
             // SWOT使用情况
