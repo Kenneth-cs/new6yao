@@ -598,6 +598,14 @@ struct ParticleCollisionView: View {
                 )
                 await MainActor.run {
                     matrixResultV2 = result
+                    // 扣除本次使用次数
+                    PermissionManager.shared.incrementFiveElementDecisionCount()
+                    // 保存历史记录
+                    let record = MatrixDecisionRecord(
+                        scenario: scenario, question: question,
+                        options: validOptions, result: result
+                    )
+                    MatrixHistoryStore.shared.save(record)
                     tryNavigateToResult()
                 }
             } catch {

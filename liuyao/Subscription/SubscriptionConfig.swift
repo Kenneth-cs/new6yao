@@ -155,17 +155,19 @@ struct SubscriptionConfig {
         switch tier {
         case .free:
             return UsageQuota(
-                dailyDivinationLimit: freeDailyDivination,
-                monthlySWOTLimit: freeMonthlySWOT,
-                monthlyMatrixLimit: freeMonthlyMatrix,
-                historyRecordsLimit: freeHistoryLimit
+                dailyDivinationLimit:  freeDailyDivination,
+                monthlySWOTLimit:      freeMonthlySWOT,
+                monthlyMatrixLimit:    freeMonthlyMatrix,
+                historyRecordsLimit:   freeHistoryLimit,
+                dailyFiveElementLimit: 1
             )
         case .proMonthly, .proYearly:
             return UsageQuota(
-                dailyDivinationLimit: proDailyDivination,
-                monthlySWOTLimit: proMonthlySWOT,
-                monthlyMatrixLimit: proMonthlyMatrix,
-                historyRecordsLimit: proHistoryLimit
+                dailyDivinationLimit:  proDailyDivination,
+                monthlySWOTLimit:      proMonthlySWOT,
+                monthlyMatrixLimit:    proMonthlyMatrix,
+                historyRecordsLimit:   proHistoryLimit,
+                dailyFiveElementLimit: -1
             )
         }
     }

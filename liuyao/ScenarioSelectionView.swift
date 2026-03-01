@@ -19,6 +19,9 @@ struct ScenarioSelectionView: View {
     @State private var selectedScenario: DecisionScenario? = nil
     @State private var optionInputs: [String] = [""]
     @State private var navigateToParticle = false
+    @State private var showSubscriptionPrompt = false
+
+    @ObservedObject private var pm = PermissionManager.shared
 
     let scenarios: [DecisionScenario] = [
         .init(name: "事业/学业", subtitle: "职位升迁 · 创业择业",
@@ -81,6 +84,9 @@ struct ScenarioSelectionView: View {
                 question: "",
                 options: optionInputs.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             )
+        }
+        .sheet(isPresented: $showSubscriptionPrompt) {
+            SubscriptionPromptView(isPresented: $showSubscriptionPrompt, trigger: .dailyLimitReached)
         }
     }
 
@@ -248,23 +254,38 @@ struct ScenarioSelectionView: View {
             }
 
             // 开始分析按钮
-            Button(action: { navigateToParticle = true }) {
-                HStack(spacing: 8) {
-                    Text("开始决策分析")
-                        .font(.headline).fontWeight(.semibold)
-                    Image(systemName: "sparkles")
+            VStack(spacing: 6) {
+                Button(action: {
+                    if pm.canUseFiveElementDecision() {
+                        navigateToParticle = true
+                    } else {
+                        showSubscriptionPrompt = true
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Text("开始决策分析")
+                            .font(.headline).fontWeight(.semibold)
+                        Image(systemName: "sparkles")
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(red: 0.45, green: 0.3, blue: 0.85), Color(red: 0.6, green: 0.35, blue: 0.9)],
+                            startPoint: .leading, endPoint: .trailing
+                        ),
+                        in: Capsule()
+                    )
+                    .shadow(color: .purple.opacity(0.35), radius: 10, x: 0, y: 5)
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    LinearGradient(
-                        colors: [Color(red: 0.45, green: 0.3, blue: 0.85), Color(red: 0.6, green: 0.35, blue: 0.9)],
-                        startPoint: .leading, endPoint: .trailing
-                    ),
-                    in: Capsule()
-                )
-                .shadow(color: .purple.opacity(0.35), radius: 10, x: 0, y: 5)
+                // 次数提示
+                if !pm.currentTier.isPro {
+                    let remaining = pm.getDailyFiveElementRemaining()
+                    Text(remaining > 0 ? "今日剩余 \(remaining) 次免费决策" : "今日次数已用完，升级专业版解锁无限次")
+                        .font(.caption2)
+                        .foregroundColor(remaining > 0 ? Color.purple.opacity(0.6) : Color.orange)
+                }
             }
         }
         .padding(20)

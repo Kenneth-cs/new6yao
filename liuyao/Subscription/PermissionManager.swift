@@ -95,13 +95,22 @@ class PermissionManager: ObservableObject {
     
     /// 是否可以保存更多历史记录
     func canSaveMoreRecords() -> Bool {
-        // 专业版无限制
-        if currentTier.isPro {
-            return true
-        }
-        
-        // 免费版检查记录数量限制
+        if currentTier.isPro { return true }
         return usageStats.totalHistoryRecords < usageQuota.historyRecordsLimit
+    }
+
+    /// 是否可以使用五行决策（每日限额）
+    func canUseFiveElementDecision() -> Bool {
+        if currentTier.isPro { return true }
+        checkAndResetCounters()
+        return usageStats.dailyFiveElementCount < usageQuota.dailyFiveElementLimit
+    }
+
+    /// 今日五行决策剩余次数（-1 = 无限）
+    func getDailyFiveElementRemaining() -> Int {
+        if currentTier.isPro { return -1 }
+        checkAndResetCounters()
+        return max(0, usageQuota.dailyFiveElementLimit - usageStats.dailyFiveElementCount)
     }
     
     // MARK: - 使用次数增加方法
@@ -130,13 +139,18 @@ class PermissionManager: ObservableObject {
     
     /// 增加决策矩阵使用次数
     func incrementMatrixCount() {
-        // 专业版不计数
         guard !currentTier.isPro else { return }
-        
         usageStats.monthlyMatrixCount += 1
         saveUsageStatistics()
-        
         print("📊 决策矩阵次数 +1，当前：\(usageStats.monthlyMatrixCount)/\(usageQuota.monthlyMatrixLimit)")
+    }
+
+    /// 增加五行决策使用次数（每天计数）
+    func incrementFiveElementDecisionCount() {
+        guard !currentTier.isPro else { return }
+        usageStats.dailyFiveElementCount += 1
+        saveUsageStatistics()
+        print("📊 五行决策次数 +1，今日：\(usageStats.dailyFiveElementCount)/\(usageQuota.dailyFiveElementLimit)")
     }
     
     /// 更新历史记录总数

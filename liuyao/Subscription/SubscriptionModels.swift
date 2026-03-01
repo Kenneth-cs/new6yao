@@ -168,29 +168,53 @@ struct UsageQuota: Codable {
     let monthlySWOTLimit: Int          // 每月SWOT次数（-1表示无限）
     let monthlyMatrixLimit: Int        // 每月决策矩阵次数（-1表示无限）
     let historyRecordsLimit: Int       // 历史记录保留数量（-1表示无限）
-    
+    let dailyFiveElementLimit: Int     // 每日五行决策次数（-1表示无限）
+
     var isUnlimited: Bool {
         return dailyDivinationLimit == -1 &&
                monthlySWOTLimit == -1 &&
                monthlyMatrixLimit == -1 &&
-               historyRecordsLimit == -1
+               historyRecordsLimit == -1 &&
+               dailyFiveElementLimit == -1
     }
-    
+
+    // 兼容旧版 UserDefaults（无 dailyFiveElementLimit 字段）
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dailyDivinationLimit  = try c.decode(Int.self, forKey: .dailyDivinationLimit)
+        monthlySWOTLimit      = try c.decode(Int.self, forKey: .monthlySWOTLimit)
+        monthlyMatrixLimit    = try c.decode(Int.self, forKey: .monthlyMatrixLimit)
+        historyRecordsLimit   = try c.decode(Int.self, forKey: .historyRecordsLimit)
+        dailyFiveElementLimit = try c.decodeIfPresent(Int.self, forKey: .dailyFiveElementLimit) ?? 1
+    }
+
+    init(dailyDivinationLimit: Int, monthlySWOTLimit: Int,
+         monthlyMatrixLimit: Int, historyRecordsLimit: Int,
+         dailyFiveElementLimit: Int) {
+        self.dailyDivinationLimit  = dailyDivinationLimit
+        self.monthlySWOTLimit      = monthlySWOTLimit
+        self.monthlyMatrixLimit    = monthlyMatrixLimit
+        self.historyRecordsLimit   = historyRecordsLimit
+        self.dailyFiveElementLimit = dailyFiveElementLimit
+    }
+
     static var free: UsageQuota {
         return UsageQuota(
-            dailyDivinationLimit: 1,
-            monthlySWOTLimit: 10,
-            monthlyMatrixLimit: 10,
-            historyRecordsLimit: 3
+            dailyDivinationLimit:  1,
+            monthlySWOTLimit:      10,
+            monthlyMatrixLimit:    10,
+            historyRecordsLimit:   3,
+            dailyFiveElementLimit: 1    // 免费版每天 1 次五行决策
         )
     }
-    
+
     static var pro: UsageQuota {
         return UsageQuota(
-            dailyDivinationLimit: -1,
-            monthlySWOTLimit: -1,
-            monthlyMatrixLimit: -1,
-            historyRecordsLimit: -1
+            dailyDivinationLimit:  -1,
+            monthlySWOTLimit:      -1,
+            monthlyMatrixLimit:    -1,
+            historyRecordsLimit:   -1,
+            dailyFiveElementLimit: -1   // 专业版无限
         )
     }
 }
@@ -201,17 +225,33 @@ struct UsageStatistics: Codable {
     var monthlySWOTCount: Int = 0
     var monthlyMatrixCount: Int = 0
     var totalHistoryRecords: Int = 0
-    
+    var dailyFiveElementCount: Int = 0  // 每日五行决策使用次数
+
     var lastDailyResetDate: Date = Date()
     var lastMonthlyResetDate: Date = Date()
-    
+
+    // 兼容旧版（无 dailyFiveElementCount 字段）
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dailyDivinationCount  = try c.decodeIfPresent(Int.self,  forKey: .dailyDivinationCount)  ?? 0
+        monthlySWOTCount      = try c.decodeIfPresent(Int.self,  forKey: .monthlySWOTCount)      ?? 0
+        monthlyMatrixCount    = try c.decodeIfPresent(Int.self,  forKey: .monthlyMatrixCount)    ?? 0
+        totalHistoryRecords   = try c.decodeIfPresent(Int.self,  forKey: .totalHistoryRecords)   ?? 0
+        dailyFiveElementCount = try c.decodeIfPresent(Int.self,  forKey: .dailyFiveElementCount) ?? 0
+        lastDailyResetDate    = try c.decodeIfPresent(Date.self, forKey: .lastDailyResetDate)    ?? Date()
+        lastMonthlyResetDate  = try c.decodeIfPresent(Date.self, forKey: .lastMonthlyResetDate)  ?? Date()
+    }
+
+    init() {}
+
     mutating func resetDaily() {
-        dailyDivinationCount = 0
+        dailyDivinationCount  = 0
+        dailyFiveElementCount = 0
         lastDailyResetDate = Date()
     }
-    
+
     mutating func resetMonthly() {
-        monthlySWOTCount = 0
+        monthlySWOTCount   = 0
         monthlyMatrixCount = 0
         lastMonthlyResetDate = Date()
     }

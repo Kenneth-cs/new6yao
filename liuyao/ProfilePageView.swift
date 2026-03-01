@@ -150,24 +150,24 @@ struct StatisticsPanel: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                // 分析次数
+                // 分析次数（六爻 + 五行决策合并）
                 EnhancedStatisticCard(
                     title: "分析次数",
-                    value: "\(statisticsService.totalDivinations)",
+                    value: "\(statisticsService.totalAnalysis)",
                     subtitle: "累计分析",
                     icon: "questionmark.circle.fill",
                     color: .blue,
-                    trend: statisticsService.totalDivinations > 0 ? .up : .neutral
+                    trend: statisticsService.totalAnalysis > 0 ? .up : .neutral
                 )
                 
-                // 本月分析
+                // 本月分析（合并）
                 EnhancedStatisticCard(
                     title: "本月分析",
-                    value: "\(statisticsService.monthlyDivinations)",
+                    value: "\(statisticsService.monthlyAnalysis)",
                     subtitle: "当月活跃度",
                     icon: "calendar.circle.fill",
                     color: .green,
-                    trend: statisticsService.monthlyDivinations > 0 ? .up : .neutral
+                    trend: statisticsService.monthlyAnalysis > 0 ? .up : .neutral
                 )
                 
                 // 准确度反馈
@@ -212,14 +212,25 @@ struct StatisticsPanel: View {
     }
 }
 
-// MARK: - 最近决策部分
+// MARK: - 历史记录部分（六爻 + 五行决策合并）
 struct RecentDecisionsSection: View {
     let records: [DivinationRecord]
-    
+
+    // 五行决策最近 3 条
+    private var matrixRecords: [MatrixDecisionRecord] {
+        Array(MatrixHistoryStore.shared.loadAll().prefix(3))
+    }
+
+    private var isEmpty: Bool { records.isEmpty && matrixRecords.isEmpty }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             sectionHeader
-            recordsList
+            if isEmpty {
+                emptyState
+            } else {
+                recordsList
+            }
         }
         .padding(20)
         .background(
@@ -228,96 +239,119 @@ struct RecentDecisionsSection: View {
                 .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
         )
     }
-    
-    // 拆分子视图：标题栏
+
     private var sectionHeader: some View {
         HStack {
             Image(systemName: "clock.arrow.circlepath")
-                .foregroundColor(.purple)
-                .font(.title3)
-            Text("最近决策")
-                .font(.title3)
-                .fontWeight(.bold)
+                .foregroundColor(.purple).font(.title3)
+            Text("历史记录")
+                .font(.title3).fontWeight(.bold)
             Spacer()
             NavigationLink(destination: HistoryPageView()) {
                 Text("查看全部")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.subheadline).foregroundColor(.secondary)
             }
         }
     }
-    
-    // 拆分子视图：记录列表
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "tray")
+                .font(.system(size: 36))
+                .foregroundColor(.secondary.opacity(0.5))
+            Text("暂无历史记录")
+                .font(.subheadline).foregroundColor(.secondary)
+            Text("去「摇卦」或「决策」开始第一次分析吧")
+                .font(.caption).foregroundColor(.secondary.opacity(0.7))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 20)
+    }
+
     private var recordsList: some View {
-        Group {
-            if records.isEmpty {
-                // 空状态提示
-                VStack(spacing: 12) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 36))
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("暂无决策记录")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text("去「摇卦」tab 进行第一次预测吧")
-                        .font(.caption)
-                        .foregroundColor(.secondary.opacity(0.7))
-                        .multilineTextAlignment(.center)
+        VStack(spacing: 10) {
+            // 五行决策记录
+            ForEach(matrixRecords) { record in
+                MatrixHistoryRow(record: record)
+            }
+            // 六爻记录
+            ForEach(records, id: \.objectID) { record in
+                NavigationLink(destination: HistoryDetailView(record: record)) {
+                    DivinationHistoryRow(record: record)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(records, id: \.objectID) { record in
-                        NavigationLink(destination: HistoryDetailView(record: record)) {
-                            RecentDecisionRow(record: record)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
     }
 }
 
-// 拆分子视图：单条记录行（彻底解决编译器类型检查超时）
-private struct RecentDecisionRow: View {
+// 五行决策历史行
+private struct MatrixHistoryRow: View {
+    let record: MatrixDecisionRecord
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: record.scenarioIcon)
+                .font(.body).foregroundColor(.purple)
+                .frame(width: 32, height: 32)
+                .background(Color.purple.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(record.options.joined(separator: " vs "))
+                    .font(.subheadline).fontWeight(.medium)
+                    .foregroundColor(.primary).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text("五行决策")
+                        .font(.caption2).padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Color.indigo.opacity(0.10))
+                        .foregroundColor(.indigo).cornerRadius(4)
+                    Text(record.scenario)
+                        .font(.caption2).foregroundColor(.secondary)
+                    Spacer()
+                    Text(record.date, style: .date)
+                        .font(.caption2).foregroundColor(.secondary)
+                }
+            }
+
+            // 分数角标
+            VStack(spacing: 1) {
+                Text("\(record.score)")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(record.verdictColor)
+                Text(record.verdictLabel)
+                    .font(.system(size: 9)).foregroundColor(record.verdictColor)
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+// 六爻历史行
+private struct DivinationHistoryRow: View {
     let record: DivinationRecord
-    
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
                 Text(record.question ?? "无标题")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                tagRow
+                    .font(.headline).foregroundColor(.primary).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text("六爻预测")
+                        .font(.caption2).padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Color.purple.opacity(0.10))
+                        .foregroundColor(.purple).cornerRadius(4)
+                    if let date = record.createdAt {
+                        Text(date, style: .date).font(.caption2).foregroundColor(.secondary)
+                    }
+                }
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.gray.opacity(0.5))
+            Image(systemName: "chevron.right").font(.caption).foregroundColor(.gray.opacity(0.5))
         }
-        .padding()
+        .padding(12)
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
-    }
-    
-    private var tagRow: some View {
-        HStack {
-            Text("六爻预测")
-                .font(.caption)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.purple.opacity(0.1))
-                .foregroundColor(.purple)
-                .cornerRadius(4)
-            if let date = record.createdAt {
-                Text(date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
     }
 }
 
@@ -1678,8 +1712,9 @@ struct SubscriptionStatusCard: View {
                 // 底部快速统计（仅免费版显示）
                 if !subscriptionService.isPro {
                     Divider()
-                    
-                    HStack(spacing: 16) {
+
+                    // 2×2 网格，容纳4个维度
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                         UsageQuickStat(
                             icon: "sparkles",
                             title: "问卦",
@@ -1687,10 +1722,15 @@ struct SubscriptionStatusCard: View {
                             subtitle: "今日剩余",
                             color: .purple
                         )
-                        
-                        Divider()
-                            .frame(height: 30)
-                        
+
+                        UsageQuickStat(
+                            icon: "circle.hexagongrid",
+                            title: "五行决策",
+                            value: "\(permissionManager.getDailyFiveElementRemaining())",
+                            subtitle: "今日剩余",
+                            color: .indigo
+                        )
+
                         UsageQuickStat(
                             icon: "square.grid.2x2",
                             title: "SWOT",
@@ -1698,10 +1738,7 @@ struct SubscriptionStatusCard: View {
                             subtitle: "本月剩余",
                             color: .blue
                         )
-                        
-                        Divider()
-                            .frame(height: 30)
-                        
+
                         UsageQuickStat(
                             icon: "tablecells",
                             title: "矩阵",

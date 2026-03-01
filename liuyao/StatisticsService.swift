@@ -22,8 +22,16 @@ struct AccuracyFeedback {
 class StatisticsService: ObservableObject {
     static let shared = StatisticsService()
     
+    // 六爻问卦
     @Published var totalDivinations: Int = 0
     @Published var monthlyDivinations: Int = 0
+    // 五行决策
+    @Published var totalMatrixDecisions: Int = 0
+    @Published var monthlyMatrixDecisions: Int = 0
+    // 合并总数（六爻 + 五行决策）
+    var totalAnalysis: Int { totalDivinations + totalMatrixDecisions }
+    var monthlyAnalysis: Int { monthlyDivinations + monthlyMatrixDecisions }
+
     @Published var averageAccuracy: Double = 0.0
     @Published var consecutiveDays: Int = 0
     @Published var questionTypes: [QuestionTypeData] = []
@@ -34,22 +42,20 @@ class StatisticsService: ObservableObject {
     // MARK: - 加载统计数据
     func loadStatistics(context: NSManagedObjectContext) {
         loadDivinationStatistics(context: context)
+        loadMatrixDecisionStatistics()
         loadQuestionTypeAnalysis(context: context)
         loadAccuracyFeedbacks(context: context)
         calculateConsecutiveDays(context: context)
     }
     
-    // MARK: - 加载问卦统计
+    // MARK: - 加载问卦统计（六爻）
     private func loadDivinationStatistics(context: NSManagedObjectContext) {
         let request: NSFetchRequest<DivinationRecord> = DivinationRecord.fetchRequest()
         
         do {
             let records = try context.fetch(request)
-            
-            // 总问卦次数
             totalDivinations = records.count
             
-            // 本月问卦次数
             let calendar = Calendar.current
             let now = Date()
             let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
@@ -63,35 +69,42 @@ class StatisticsService: ObservableObject {
             print("加载问卦统计失败: \(error)")
         }
     }
+
+    // MARK: - 加载五行决策统计
+    private func loadMatrixDecisionStatistics() {
+        let records = MatrixHistoryStore.shared.loadAll()
+        totalMatrixDecisions = records.count
+
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        monthlyMatrixDecisions = records.filter { $0.date >= startOfMonth }.count
+    }
     
-    // MARK: - 加载问题类型分析
+    // MARK: - 加载问题类型分析（六爻 + 五行决策合并）
     private func loadQuestionTypeAnalysis(context: NSManagedObjectContext) {
+        var typeCounts: [String: Int] = [:]
+
+        // 六爻问卦分类
         let request: NSFetchRequest<DivinationRecord> = DivinationRecord.fetchRequest()
-        
-        do {
-            let records = try context.fetch(request)
-            
-            // 统计各类型问题数量
-            var typeCounts: [String: Int] = [:]
-            
+        if let records = try? context.fetch(request) {
             for record in records {
-                let questionType = categorizeQuestion(record.question ?? "")
-                typeCounts[questionType, default: 0] += 1
+                let t = categorizeQuestion(record.question ?? "")
+                typeCounts[t, default: 0] += 1
             }
-            
-            // 计算百分比并排序
-            let total = records.count
-            questionTypes = typeCounts.map { (type, count) in
-                QuestionTypeData(
-                    type: type,
-                    count: count,
-                    percentage: total > 0 ? Double(count) / Double(total) : 0.0
-                )
-            }.sorted { $0.count > $1.count }
-            
-        } catch {
-            print("加载问题类型分析失败: \(error)")
         }
+
+        // 五行决策场景分类
+        for record in MatrixHistoryStore.shared.loadAll() {
+            let t = record.scenario.isEmpty ? "其他决策" : record.scenario
+            typeCounts[t, default: 0] += 1
+        }
+
+        let total = typeCounts.values.reduce(0, +)
+        questionTypes = typeCounts.map { type, count in
+            QuestionTypeData(type: type, count: count,
+                             percentage: total > 0 ? Double(count) / Double(total) : 0.0)
+        }.sorted { $0.count > $1.count }
     }
     
     // MARK: - 问题分类逻辑
