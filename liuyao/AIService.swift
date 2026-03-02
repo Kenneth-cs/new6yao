@@ -399,12 +399,21 @@ class AIService: ObservableObject {
           木：\(woodVal)  火：\(fireVal)  土：\(earthVal)  金：\(metalVal)  水：\(waterVal)
 
         【需要 AI 判断的字段】：
-        1. favorableElements：根据日主旺衰和月令，判断最有助益的 2 个五行（喜用神）
+        1. favorableElements：判断最有助益的 2 个五行（喜用神）
         2. unfavorableElements：判断最需规避的 2 个五行（忌神）
         3. weakElement：必须从 favorableElements 中选取占比最低的那个五行
            （逻辑：急需补充的能量 = 有益但又最匮乏的元素，绝不能选忌神元素）
         4. diagnosis：50~80字，用"你是..."开头，通俗比喻，不使用专业术语
         5. remedy：30~50字，具体建议选择什么类型的环境/机会
+
+        【判断喜用神的核心方法】：
+        步骤一：先判断日主旺弱
+        - 月令（月支）是否帮扶日主？月支主气与日主同五行或相生为得令，否则失令
+        - 其余三柱天干地支中，帮扶（同行+生我）vs 克耗（克我+泄我）哪方多？
+        - "克压强度"：若有一行以高占比（>30%）直接克日主，日主实际能量需打折
+        步骤二：弱日主 → 喜"生我"和"帮我"的五行；强日主 → 喜"克我"（官）或"泄我"（食伤）
+        步骤三：特别注意"调候原则"仅适用于日主中等偏强时，弱日主不能强行套用调候
+           例：弱丙火（月令失令+强金克）→ 应喜木生火，而非水调候（水再克弱火是错的）
 
         规则：
         - weakElement 必须属于 favorableElements，不得是 unfavorableElements 中的元素
@@ -418,24 +427,16 @@ class AIService: ObservableObject {
         let rawContent = try await getPortraitAIResponse(system: portraitSystemPrompt, prompt: prompt)
         var result = try parseMatrixJSON(from: rawContent, as: EnergyPortraitResult.self)
 
-        // 3. 用本地计算结果覆盖确定性字段；同时做防御校验：
-        //    若 AI 返回的 weakElement 落在忌神里，则改为喜用神中占比最低的那个
-        let aiWeak = result.weakElement
-        let isWeakInFavorable = result.favorableElements.contains(aiWeak)
-        let correctedWeak: String
-        if isWeakInFavorable {
-            correctedWeak = aiWeak
-        } else {
-            // AI 给出了不合理的 weakElement，降级为喜用神里最弱的
-            correctedWeak = result.favorableElements
-                .compactMap { name -> (String, Double)? in
-                    guard let fe = FiveElement(rawValue: name) else { return nil }
-                    return (name, localScores[fe] ?? 0)
-                }
-                .min(by: { $0.1 < $1.1 })?.0
-                ?? result.favorableElements.first
-                ?? aiWeak
-        }
+        // 3. weakElement 完全由本地数据决定：喜用神中占比最低的那个（不信 AI 的选择）
+        //    逻辑：急需补充 = "对我有益 且 目前最匮乏" 的元素
+        let correctedWeak: String = result.favorableElements
+            .compactMap { name -> (String, Double)? in
+                guard let fe = FiveElement(rawValue: name) else { return nil }
+                return (name, localScores[fe] ?? 0)
+            }
+            .min(by: { $0.1 < $1.1 })?.0
+            ?? result.favorableElements.first
+            ?? result.weakElement
 
         result = EnergyPortraitResult(
             wood:                localScores[.wood]  ?? result.wood,
@@ -692,12 +693,40 @@ class AIService: ObservableObject {
 
         决策延伸（extensions）：2~3条，分析"如果选项劣势明显时怎么补救"或"长期主义视角下的权衡"
 
+        重要：options 数组中每个选项的 name 字段，必须直接使用用户输入的原始文字（如"去日本旅行"），不要写成"选项A"或"选项B"。
+
         输出 JSON（严格按此结构，无任何额外内容）：
-        {"verdict":"优选A","verdictReason":"30字内核心原因","options":[{"name":"选项A","score":85,"verdict":"大吉","label":"优选","elements":["水","木"],"matrixRows":[{"dimension":"维度1","type":"benefit","label":"补水木","detail":"一句话说明"},{"dimension":"维度2","type":"benefit","label":"耗土","detail":"一句话说明"},{"dimension":"维度3","type":"consumption","label":"中性","detail":"一句话说明"}],"summary":"30字内总结"}],"dimensions":["维度1","维度2","维度3"],"extensions":["延伸分析1","延伸分析2"],"actionPlan":{"timing":"具体时机","approach":"具体行动","avoid":"具体规避","compensation":"具体补偿"},"fiveElementAnalysis":"结合命局的五行分析说明（50~100字）","hasFatalRisk":false,"fatalRiskDetail":""}
+        {"verdict":"优选去日本旅行","verdictReason":"30字内核心原因","options":[{"name":"去日本旅行","score":85,"verdict":"大吉","label":"优选","elements":["水","木"],"matrixRows":[{"dimension":"维度1","type":"benefit","label":"补水木","detail":"一句话说明"},{"dimension":"维度2","type":"benefit","label":"耗土","detail":"一句话说明"},{"dimension":"维度3","type":"consumption","label":"中性","detail":"一句话说明"}],"summary":"30字内总结"}],"dimensions":["维度1","维度2","维度3"],"extensions":["延伸分析1","延伸分析2"],"actionPlan":{"timing":"具体时机","approach":"具体行动","avoid":"具体规避","compensation":"具体补偿"},"fiveElementAnalysis":"结合命局的五行分析说明（50~100字）","hasFatalRisk":false,"fatalRiskDetail":""}
         """
 
         let rawContent = try await getMatrixAIResponse(system: matrixV2SystemPrompt, prompt: prompt)
-        return try parseMatrixJSON(from: rawContent, as: DecisionMatrixResultV2.self)
+        var parsed = try parseMatrixJSON(from: rawContent, as: DecisionMatrixResultV2.self)
+
+        // 强制用用户原始输入覆盖 name，防止 AI 输出"选项A/B"
+        let correctedOptions = parsed.options.enumerated().map { idx, opt in
+            let userInputName = idx < options.count ? options[idx] : opt.name
+            return DecisionOptionV2(
+                name: userInputName,
+                score: opt.score,
+                verdict: opt.verdict,
+                label: opt.label,
+                elements: opt.elements,
+                matrixRows: opt.matrixRows,
+                summary: opt.summary
+            )
+        }
+        parsed = DecisionMatrixResultV2(
+            verdict:             parsed.verdict,
+            verdictReason:       parsed.verdictReason,
+            options:             correctedOptions,
+            dimensions:          parsed.dimensions,
+            extensions:          parsed.extensions,
+            actionPlan:          parsed.actionPlan,
+            fiveElementAnalysis: parsed.fiveElementAnalysis,
+            hasFatalRisk:        parsed.hasFatalRisk,
+            fatalRiskDetail:     parsed.fatalRiskDetail
+        )
+        return parsed
     }
 }
 

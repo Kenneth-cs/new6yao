@@ -137,26 +137,30 @@ class BaziEngine {
     
     private func quantifyEnergy(pillars: FourPillars) -> [FiveElement: Double] {
         var scores: [FiveElement: Double] = [.wood: 0, .fire: 0, .earth: 0, .metal: 0, .water: 0]
-        
+
         // 权重定义
         let weightSeason = 40.0 // 得令 (月支)
         let weightStem   = 15.0 // 得势 (天干)
-        let weightBranch = 10.0 // 得地 (地支藏干)
-        
+        let weightBranch = 10.0 // 得地 (地支主气)
+
         // 1. 得令 (月支决定性作用)
         let monthElement = pillars.month.branch.mainElement
         scores[monthElement, default: 0] += weightSeason
-        
+
         // 2. 得势 (四柱天干)
-        for p in [pillars.year, pillars.month, pillars.day, pillars.time] {
+        // ⚠️ 注意：日主天干代表被测量的"主体"本身，不计入"命局环境"的支撑力量
+        // 否则日主元素会被多算 15 分，导致旺弱判断偏旺
+        for p in [pillars.year, pillars.month, pillars.time] {
             scores[p.stem.element, default: 0] += weightStem
         }
-        
-        // 3. 得地 (四柱地支藏干)
+        // 日柱天干仅计一半权重（体现日主自身的根基，但不作为外力）
+        scores[pillars.day.stem.element, default: 0] += weightStem * 0.5
+
+        // 3. 得地 (四柱地支主气)
         for p in [pillars.year, pillars.month, pillars.day, pillars.time] {
             scores[p.branch.mainElement, default: 0] += weightBranch
         }
-        
+
         return scores
     }
     

@@ -26,19 +26,19 @@ struct ScenarioSelectionView: View {
     let scenarios: [DecisionScenario] = [
         .init(name: "事业/学业", subtitle: "职位升迁 · 创业择业",
               englishName: "Career", icon: "graduationcap.fill",
-              element: .wood, inputPlaceholder: "输入公司/学校名称"),
+              element: .wood, inputPlaceholder: "如：字节跳动 / 腾讯 / 考研北大"),
         .init(name: "投资/理财", subtitle: "股权 · 楼市 · 基金",
               englishName: "Wealth", icon: "dollarsign.circle.fill",
-              element: .water, inputPlaceholder: "输入投资标的名称"),
+              element: .water, inputPlaceholder: "如：买比特币 / 沪深300基金 / 存定期"),
         .init(name: "情感/人际", subtitle: "感情 · 合伙 · 社交",
               englishName: "Love", icon: "heart.fill",
-              element: .fire, inputPlaceholder: "描述人际选项"),
+              element: .fire, inputPlaceholder: "如：跟 A 在一起 / 跟 B 在一起"),
         .init(name: "置业/生活", subtitle: "购房 · 装修 · 搬迁",
               englishName: "Living", icon: "house.fill",
-              element: .earth, inputPlaceholder: "输入楼盘/地点名称"),
+              element: .earth, inputPlaceholder: "如：买浦东新房 / 租徐汇公寓"),
         .init(name: "出行/其他", subtitle: "旅行 · 移居 · 杂事",
               englishName: "Travel", icon: "airplane.departure",
-              element: .metal, inputPlaceholder: "描述出行选项")
+              element: .metal, inputPlaceholder: "如：去日本旅行 / 留在国内")
     ]
 
     var body: some View {
@@ -263,7 +263,7 @@ struct ScenarioSelectionView: View {
                     }
                 }) {
                     HStack(spacing: 8) {
-                        Text("开始决策分析")
+                        Text("开始推演")
                             .font(.headline).fontWeight(.semibold)
                         Image(systemName: "sparkles")
                     }

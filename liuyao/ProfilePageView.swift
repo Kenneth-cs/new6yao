@@ -382,16 +382,40 @@ struct StatisticsPanel: View {
     }
 }
 
-// MARK: - 历史记录部分（六爻 + 五行决策合并）
+// MARK: - 历史记录部分（六爻 + 五行决策按时间倒序合并）
 struct RecentDecisionsSection: View {
     let records: [DivinationRecord]
 
-    // 五行决策最近 3 条
-    private var matrixRecords: [MatrixDecisionRecord] {
-        Array(MatrixHistoryStore.shared.loadAll().prefix(3))
+    // 统一条目类型，携带排序用日期
+    private enum HistoryItem: Identifiable {
+        case matrix(MatrixDecisionRecord)
+        case divination(DivinationRecord)
+
+        var id: String {
+            switch self {
+            case .matrix(let r):     return "m-\(r.id)"
+            case .divination(let r): return "d-\(r.objectID)"
+            }
+        }
+        var date: Date {
+            switch self {
+            case .matrix(let r):     return r.date
+            case .divination(let r): return r.createdAt ?? .distantPast
+            }
+        }
     }
 
-    private var isEmpty: Bool { records.isEmpty && matrixRecords.isEmpty }
+    // 两类记录合并后按时间倒序，最多显示 5 条
+    private var mergedItems: [HistoryItem] {
+        let matrixItems = MatrixHistoryStore.shared.loadAll().map { HistoryItem.matrix($0) }
+        let divinItems  = records.map { HistoryItem.divination($0) }
+        return (matrixItems + divinItems)
+            .sorted { $0.date > $1.date }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private var isEmpty: Bool { mergedItems.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -440,30 +464,30 @@ struct RecentDecisionsSection: View {
 
     private var recordsList: some View {
         VStack(spacing: 10) {
-            // 五行决策记录
-            ForEach(matrixRecords) { record in
-                if let full = record.fullResult {
-                    NavigationLink(destination:
-                        MatrixResultViewB(
-                            scenario: nil,
-                            question: record.question,
-                            options: record.options,
-                            matrixResult: full
-                        )
-                    ) {
+            ForEach(mergedItems) { item in
+                switch item {
+                case .matrix(let record):
+                    if let full = record.fullResult {
+                        NavigationLink(destination:
+                            MatrixResultViewB(
+                                scenario: nil,
+                                question: record.question,
+                                options: record.options,
+                                matrixResult: full
+                            )
+                        ) {
+                            MatrixHistoryRow(record: record)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
                         MatrixHistoryRow(record: record)
                     }
+                case .divination(let record):
+                    NavigationLink(destination: HistoryDetailView(record: record)) {
+                        DivinationHistoryRow(record: record)
+                    }
                     .buttonStyle(PlainButtonStyle())
-                } else {
-                    MatrixHistoryRow(record: record)
                 }
-            }
-            // 六爻记录
-            ForEach(records, id: \.objectID) { record in
-                NavigationLink(destination: HistoryDetailView(record: record)) {
-                    DivinationHistoryRow(record: record)
-                }
-                .buttonStyle(PlainButtonStyle())
             }
         }
     }

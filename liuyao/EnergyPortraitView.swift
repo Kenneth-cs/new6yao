@@ -105,10 +105,7 @@ struct EnergyPortraitView: View {
                             .padding(.horizontal, 20)
                             .disabled(isAnalyzing)
                         }
-                        Text("基于你的八字命局，AI 为你分析最优选项")
-                            .font(.caption2)
-                            .foregroundColor(.secondary.opacity(0.75))
-                            .padding(.bottom, 8)
+                        Spacer().frame(height: 8)
                     }
                     .background(Color(red: 0.95, green: 0.94, blue: 0.98))
                 }
@@ -194,8 +191,20 @@ struct EnergyPortraitView: View {
                 if isAnalyzing {
                     ProgressView().tint(.purple)
                 } else {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.title2).foregroundColor(.purple)
+                    VStack(spacing: 6) {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.title2).foregroundColor(.purple)
+                        Button(action: {
+                            BirthInfoStore.shared.clearPortraitCache()
+                            portrait = nil
+                            analyzePortrait()
+                        }) {
+                            Text("重新推算")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.purple.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .padding(16)
@@ -244,14 +253,8 @@ struct EnergyPortraitView: View {
     // MARK: - 能量诊断卡
     private func diagnosticCard(_ p: EnergyPortraitResult) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("能量诊断", systemImage: "sparkles")
-                    .font(.headline).fontWeight(.bold)
-                Spacer()
-                // 缓存角标
-                Label("已缓存", systemImage: "checkmark.icloud.fill")
-                    .font(.caption2).foregroundColor(.purple.opacity(0.6))
-            }
+            Label("能量诊断", systemImage: "sparkles")
+                .font(.headline).fontWeight(.bold)
 
             Text(p.diagnosis)
                 .font(.body).foregroundColor(.secondary).lineSpacing(5)
@@ -312,10 +315,10 @@ struct EnergyPortraitView: View {
             Spacer()
 
             VStack(spacing: 3) {
-                Text("开始五行决策分析")
+                Text("告诉我你在纠结什么")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.white)
-                Text("喜\(p.favorableElements.joined(separator: "/")) · 忌\(p.unfavorableElements.joined(separator: "/"))")
+                Text("基于你的命局，大师为你找出最优选项")
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.75))
             }
