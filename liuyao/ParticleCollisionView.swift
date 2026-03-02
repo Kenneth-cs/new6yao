@@ -385,25 +385,24 @@ struct ParticleCollisionView: View {
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(color.opacity(0.30), lineWidth: 1))
     }
 
-    // MARK: - 底部进度卡
+    // MARK: - 底部进度区（无矩形背景，文案居中在进度条上方）
     private var progressCard: some View {
-        VStack(spacing: 14) {
-            // 文字行（明确在上方）
-            HStack {
+        VStack(spacing: 10) {
+            // 文案 + 百分比居中
+            HStack(spacing: 8) {
                 Text(progressText)
-                    .font(.subheadline)
-                    .foregroundColor(Color.white.opacity(0.80))
-                Spacer()
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color.white.opacity(0.75))
                 Text("\(Int(progressValue * 100))%")
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(Color.white.opacity(0.45))
             }
-            // 进度条（明确在下方）
+            // 进度条
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(height: 5)
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 4)
                     Capsule()
                         .fill(
                             LinearGradient(
@@ -414,24 +413,14 @@ struct ParticleCollisionView: View {
                                 startPoint: .leading, endPoint: .trailing
                             )
                         )
-                        .frame(width: max(0, geo.size.width * progressValue), height: 5)
-                        .shadow(color: Color(red: 0.20, green: 0.70, blue: 0.90).opacity(0.65), radius: 5)
+                        .frame(width: max(0, geo.size.width * progressValue), height: 4)
+                        .shadow(color: Color(red: 0.20, green: 0.70, blue: 0.90).opacity(0.7), radius: 6)
                         .animation(.easeInOut(duration: 0.6), value: progressValue)
                 }
             }
-            .frame(height: 5)
+            .frame(height: 4)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(red: 0.06, green: 0.09, blue: 0.16).opacity(0.92))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 32)
     }
 
     // MARK: - 完成卡

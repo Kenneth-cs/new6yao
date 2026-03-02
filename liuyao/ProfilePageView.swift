@@ -170,7 +170,7 @@ struct UserInfoSection: View {
         tapCount += 1
         lastTapTime = now
 
-        if tapCount >= 6 {
+        if tapCount >= 11 {
             tapCount = 0
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             showDevSheet = true
@@ -442,7 +442,21 @@ struct RecentDecisionsSection: View {
         VStack(spacing: 10) {
             // 五行决策记录
             ForEach(matrixRecords) { record in
-                MatrixHistoryRow(record: record)
+                if let full = record.fullResult {
+                    NavigationLink(destination:
+                        MatrixResultViewB(
+                            scenario: nil,
+                            question: record.question,
+                            options: record.options,
+                            matrixResult: full
+                        )
+                    ) {
+                        MatrixHistoryRow(record: record)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    MatrixHistoryRow(record: record)
+                }
             }
             // 六爻记录
             ForEach(records, id: \.objectID) { record in
