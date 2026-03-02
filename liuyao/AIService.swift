@@ -361,14 +361,29 @@ class AIService: ObservableObject {
         birthHour: ChineseHour = .wu,
         gender:    String = "未知"
     ) async throws -> EnergyPortraitResult {
-        // 1. 本地算法计算精确五行分值
+        // 1. 本地算法计算精确五行分值（确定性计算，不依赖 AI）
         let localScores = BaziEngine.shared.calculateEnergy(date: birthday, hour: birthHour)
         let localDayMaster = BaziEngine.shared.getDayMaster(date: birthday, hour: birthHour)
-        
+
+        // 2. 本地确定 dominantElement（占比最高，纯数学）
+        let elementNames: [(FiveElement, String)] = [
+            (.wood, "木"), (.fire, "火"), (.earth, "土"), (.metal, "金"), (.water, "水")
+        ]
+        let localDominantElement = elementNames
+            .max(by: { (localScores[$0.0] ?? 0) < (localScores[$1.0] ?? 0) })?.1 ?? "木"
+
+        let woodVal  = String(format: "%.2f", localScores[.wood]  ?? 0)
+        let fireVal  = String(format: "%.2f", localScores[.fire]  ?? 0)
+        let earthVal = String(format: "%.2f", localScores[.earth] ?? 0)
+        let metalVal = String(format: "%.2f", localScores[.metal] ?? 0)
+        let waterVal = String(format: "%.2f", localScores[.water] ?? 0)
+
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月dd日"
         let birthdayStr = formatter.string(from: birthday)
 
+        // weakElement 不再本地硬算：它必须是"喜用神里占比最低的"，而喜用神由AI判断
+        // 因此让 AI 在拿到占比数据后，先确定喜用神，再从喜用神中选最弱的作为 weakElement
         let prompt = """
         请分析以下用户的五行能量分布：
 
@@ -376,29 +391,67 @@ class AIService: ObservableObject {
         - 日期：\(birthdayStr)
         - 时辰：\(birthHour.rawValue)（\(birthHour.timeRange)）
         - 性别：\(gender)
-        
-        【本地算法参考数据】：
-        - 日主：\(localDayMaster)
-        - 五行能量（已归一化）：
-          木：\(String(format: "%.2f", localScores[.wood] ?? 0))
-          火：\(String(format: "%.2f", localScores[.fire] ?? 0))
-          土：\(String(format: "%.2f", localScores[.earth] ?? 0))
-          金：\(String(format: "%.2f", localScores[.metal] ?? 0))
-          水：\(String(format: "%.2f", localScores[.water] ?? 0))
 
-        分析要求：
-        1. 必须优先采纳【本地算法参考数据】中的五行数值和日主，确保数学计算准确
-        2. 根据月令、日主旺衰，判断整体命局格局
-        3. 确定最需补充的五行（weakElement）和需要规避的五行
+        【已确定的本地计算结果，必须原样输出，不得修改】：
+        - 日主：\(localDayMaster)
+        - dominantElement（最强）：\(localDominantElement)
+        - 五行能量（已归一化，总和=1.0）：
+          木：\(woodVal)  火：\(fireVal)  土：\(earthVal)  金：\(metalVal)  水：\(waterVal)
+
+        【需要 AI 判断的字段】：
+        1. favorableElements：根据日主旺衰和月令，判断最有助益的 2 个五行（喜用神）
+        2. unfavorableElements：判断最需规避的 2 个五行（忌神）
+        3. weakElement：必须从 favorableElements 中选取占比最低的那个五行
+           （逻辑：急需补充的能量 = 有益但又最匮乏的元素，绝不能选忌神元素）
         4. diagnosis：50~80字，用"你是..."开头，通俗比喻，不使用专业术语
         5. remedy：30~50字，具体建议选择什么类型的环境/机会
 
+        规则：
+        - weakElement 必须属于 favorableElements，不得是 unfavorableElements 中的元素
+        - wood/fire/earth/metal/water 数值必须与上方一致，不得更改
+        - dayMaster 必须等于 \(localDayMaster)，不得更改
+
         输出 JSON（无任何额外内容）：
-        {"wood":0.15,"fire":0.45,"earth":0.25,"metal":0.10,"water":0.05,"dayMaster":"丁火","dominantElement":"火","weakElement":"水","favorableElements":["水","木"],"unfavorableElements":["土","金"],"diagnosis":"你是...","remedy":"宜..."}
+        {"wood":\(woodVal),"fire":\(fireVal),"earth":\(earthVal),"metal":\(metalVal),"water":\(waterVal),"dayMaster":"\(localDayMaster)","dominantElement":"\(localDominantElement)","weakElement":"水","favorableElements":["水","木"],"unfavorableElements":["土","金"],"diagnosis":"你是...","remedy":"宜..."}
         """
 
-        let rawContent = try await getMatrixAIResponse(system: portraitSystemPrompt, prompt: prompt)
-        return try parseMatrixJSON(from: rawContent, as: EnergyPortraitResult.self)
+        let rawContent = try await getPortraitAIResponse(system: portraitSystemPrompt, prompt: prompt)
+        var result = try parseMatrixJSON(from: rawContent, as: EnergyPortraitResult.self)
+
+        // 3. 用本地计算结果覆盖确定性字段；同时做防御校验：
+        //    若 AI 返回的 weakElement 落在忌神里，则改为喜用神中占比最低的那个
+        let aiWeak = result.weakElement
+        let isWeakInFavorable = result.favorableElements.contains(aiWeak)
+        let correctedWeak: String
+        if isWeakInFavorable {
+            correctedWeak = aiWeak
+        } else {
+            // AI 给出了不合理的 weakElement，降级为喜用神里最弱的
+            correctedWeak = result.favorableElements
+                .compactMap { name -> (String, Double)? in
+                    guard let fe = FiveElement(rawValue: name) else { return nil }
+                    return (name, localScores[fe] ?? 0)
+                }
+                .min(by: { $0.1 < $1.1 })?.0
+                ?? result.favorableElements.first
+                ?? aiWeak
+        }
+
+        result = EnergyPortraitResult(
+            wood:                localScores[.wood]  ?? result.wood,
+            fire:                localScores[.fire]  ?? result.fire,
+            earth:               localScores[.earth] ?? result.earth,
+            metal:               localScores[.metal] ?? result.metal,
+            water:               localScores[.water] ?? result.water,
+            dayMaster:           localDayMaster,
+            dominantElement:     localDominantElement,
+            weakElement:         correctedWeak,
+            favorableElements:   result.favorableElements,
+            unfavorableElements: result.unfavorableElements,
+            diagnosis:           result.diagnosis,
+            remedy:              result.remedy
+        )
+        return result
     }
 
     /// 根据命局画像 + 决策选项，分析决策矩阵，返回 DecisionMatrixResult
@@ -502,6 +555,27 @@ class AIService: ObservableObject {
     }
 
     // MARK: - 带 System 消息的请求（temperature 0.3，提升 JSON 一致性）
+    /// 专用于能量画像分析：temperature=0 确保喜用神等判断尽量稳定
+    private func getPortraitAIResponse(system: String, prompt: String) async throws -> String {
+        let requestBody: [String: Any] = [
+            "model": "deepseek-v3-250324",
+            "messages": [
+                ["role": "system", "content": system],
+                ["role": "user",   "content": prompt]
+            ],
+            "max_tokens": 1500,
+            "temperature": 0    // 零温度 → 喜用神、忌神判断尽量固定
+        ]
+        let response = try await NetworkService.shared.sendRequest(
+            body: requestBody,
+            responseType: AIResponse.self
+        )
+        if let content = response.choices.first?.message.content {
+            return content
+        }
+        throw AIServiceError.noResponse
+    }
+
     private func getMatrixAIResponse(system: String, prompt: String) async throws -> String {
         let requestBody: [String: Any] = [
             "model": "deepseek-v3-250324",

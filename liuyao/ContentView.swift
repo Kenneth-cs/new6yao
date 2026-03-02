@@ -1239,7 +1239,7 @@ struct ResultView: View {
                                         .tint(.purple)
                                     
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("AI正在解读卦象...")
+                                        Text("大师正在解读卦象...")
                                             .font(.body)
                                             .foregroundColor(.primary)
                                         

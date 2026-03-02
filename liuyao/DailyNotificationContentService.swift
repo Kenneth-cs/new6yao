@@ -120,8 +120,9 @@ final class DailyNotificationContentService {
             let raw = try await AIService.shared.getSimpleAIResponse(prompt: prompt)
             // 提取 JSON
             let jsonStr: String
-            if let start = raw.range(of: "{"), let end = raw.range(of: "}", options: .backwards) {
-                jsonStr = String(raw[start.lowerBound...end.upperBound])
+            if let start = raw.range(of: "{"), let end = raw.range(of: "}", options: .backwards),
+               start.lowerBound <= end.lowerBound {
+                jsonStr = String(raw[start.lowerBound...end.lowerBound])
             } else {
                 jsonStr = raw
             }
@@ -162,7 +163,7 @@ final class DailyNotificationContentService {
         let recentTopic = MatrixHistoryStore.shared.loadAll().first?.scenario ?? ""
 
         // 候选文案池：按优先级打分后选最佳
-        var candidates = elementBank(element: element)
+        let candidates = elementBank(element: element)
             + seasonBank(month: month, jieQi: jieQi)
             + weekdayBank(weekday: weekday)
             + topicBank(topic: recentTopic)

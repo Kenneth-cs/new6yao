@@ -76,7 +76,7 @@ struct ParticleCollisionView: View {
                 .allowsHitTesting(false)
             }
 
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
                 Group {
                     if showWarning {
@@ -87,6 +87,7 @@ struct ParticleCollisionView: View {
                         progressCard
                     }
                 }
+                .padding(.bottom, 24)
             }
             .animation(.spring(response: 0.5), value: showWarning)
             .animation(.spring(response: 0.5), value: showCompletion)
@@ -95,6 +96,7 @@ struct ParticleCollisionView: View {
         .navigationTitle("五行能量碰撞")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .navigationDestination(isPresented: $navigateToResult) {
             MatrixResultViewB(
                 scenario: scenario,
@@ -421,7 +423,6 @@ struct ParticleCollisionView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
-        .padding(.bottom, 12)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(Color(red: 0.06, green: 0.09, blue: 0.16).opacity(0.92))
@@ -431,7 +432,6 @@ struct ParticleCollisionView: View {
                 )
         )
         .padding(.horizontal, 20)
-        .padding(.bottom, 34)
     }
 
     // MARK: - 完成卡

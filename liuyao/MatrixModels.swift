@@ -141,6 +141,13 @@ struct EnergyPortraitResult: Codable {
         [.wood: wood, .fire: fire, .earth: earth, .metal: metal, .water: water]
     }
 
+    // 日主所属五行（如"丁火"→.fire，"甲木"→.wood）
+    var dayMasterElement: FiveElement {
+        // 日主格式为"天干+五行"，取最后一个字符即五行
+        let last = String(dayMaster.suffix(1))
+        return FiveElement(rawValue: last) ?? .fire
+    }
+
     // 最需补充的五行元素
     var remedyFiveElement: FiveElement {
         FiveElement(rawValue: weakElement) ?? .water

@@ -222,7 +222,7 @@ struct EnergyPortraitView: View {
                 ProgressView()
                     .scaleEffect(1.6)
                     .tint(.white)
-                Text("AI 推算命局中…")
+                Text("大师推算命局中...")
                     .font(.subheadline).fontWeight(.medium)
                     .foregroundColor(.white)
                 Text("约需 10～20 秒，请稍候")

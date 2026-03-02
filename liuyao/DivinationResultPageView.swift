@@ -215,7 +215,7 @@ struct DivinationResultPageView: View {
                                 .scaleEffect(1.0)
                                 .tint(.purple)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("AI正在解读卦象...")
+                                Text("大师正在解读卦象...")
                                     .font(.headline)
                                     .foregroundColor(.primary)
                                 

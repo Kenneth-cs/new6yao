@@ -78,93 +78,119 @@ struct MatrixResultViewB: View {
         }
     }
 
-    // MARK: - 顶部头图（深靛蓝夜色渐变）
+    // MARK: - 顶部头图（重新设计）
     private var verdictHeader: some View {
-        ZStack(alignment: .bottomLeading) {
-            // 深靛蓝渐变背景 — 高级感
+        let winner = result.recommendedOption
+
+        return ZStack {
+            // 深靛蓝渐变背景
             LinearGradient(
                 colors: [
-                    Color(red: 0.118, green: 0.106, blue: 0.294),
-                    Color(red: 0.239, green: 0.216, blue: 0.561)
+                    Color(red: 0.10, green: 0.08, blue: 0.28),
+                    Color(red: 0.22, green: 0.18, blue: 0.52)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            // 高光晕
+            // 右上角光晕
             Circle()
-                .fill(Color(red: 0.514, green: 0.490, blue: 1.0).opacity(0.18))
-                .frame(width: 220).blur(radius: 55)
-                .offset(x: 220, y: -50)
+                .fill(Color(red: 0.50, green: 0.45, blue: 1.0).opacity(0.20))
+                .frame(width: 200).blur(radius: 60)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .offset(x: 40, y: -30)
 
-            VStack(alignment: .leading, spacing: 18) {
-                // 场景标签（毛玻璃感）
-                if let scene = scenario {
-                    Label(scene.name, systemImage: scene.icon)
-                        .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 11).padding(.vertical, 5)
-                        .background(.ultraThinMaterial.opacity(0.6), in: Capsule())
-                }
-
-                // 主结论行
-                HStack(alignment: .center, spacing: 14) {
-                    // 对勾圆圈
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
-                            .frame(width: 48)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 18, weight: .heavy))
-                            .foregroundColor(.white)
-                    }
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(result.verdict)
-                            .font(.system(size: 22, weight: .heavy))
-                            .foregroundColor(.white)
-                        Text(result.verdictReason)
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.72))
-                            .lineSpacing(3)
-                            .lineLimit(2)
+            VStack(spacing: 0) {
+                // ── 顶部：场景 + 奖杯 ──────────────────────────
+                HStack {
+                    if let scene = scenario {
+                        Label(scene.name, systemImage: scene.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.85))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Color.white.opacity(0.12), in: Capsule())
                     }
                     Spacer()
-                    // 奖杯
                     ZStack {
                         Circle()
-                            .fill(Color(red: 1.0, green: 0.84, blue: 0.12).opacity(0.2))
-                            .frame(width: 50)
+                            .fill(Color(red: 1.0, green: 0.84, blue: 0.12).opacity(0.18))
+                            .frame(width: 38)
                         Image(systemName: "trophy.fill")
-                            .font(.title2)
+                            .font(.system(size: 17))
                             .foregroundColor(Color(red: 1.0, green: 0.84, blue: 0.22))
                     }
                 }
 
-                // 选项标签行
+                Spacer(minLength: 14)
+
+                // ── 中部：主标题 + 得分并排 ─────────────────────
+                HStack(alignment: .bottom, spacing: 16) {
+                    // 左：推荐结论
+                    VStack(alignment: .leading, spacing: 6) {
+                        // 优选标签
+                        if let w = winner {
+                            Text(w.label)
+                                .font(.system(size: 11, weight: .heavy))
+                                .foregroundColor(w.labelColor)
+                                .padding(.horizontal, 9).padding(.vertical, 3)
+                                .background(w.labelColor.opacity(0.18), in: Capsule())
+                        }
+                        // 选项名（大字）
+                        Text(winner?.name ?? result.verdict)
+                            .font(.system(size: 26, weight: .heavy))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        // 原因描述
+                        Text(result.verdictReason)
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.68))
+                            .lineLimit(2)
+                            .lineSpacing(3)
+                    }
+
+                    Spacer()
+
+                    // 右：大分数
+                    if let w = winner {
+                        VStack(spacing: 2) {
+                            Text("\(w.score)")
+                                .font(.system(size: 44, weight: .heavy, design: .rounded))
+                                .foregroundColor(.white)
+                            Text(w.verdict)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(w.labelColor)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(w.labelColor.opacity(0.18), in: Capsule())
+                        }
+                    }
+                }
+
+                Spacer(minLength: 14)
+
+                // ── 底部：所有选项标签 ──────────────────────────
                 HStack(spacing: 8) {
                     ForEach(result.options) { opt in
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(opt.labelColor)
-                                .frame(width: 6)
+                        HStack(spacing: 5) {
+                            Circle().fill(opt.labelColor).frame(width: 5)
                             Text(opt.label)
-                                .font(.system(size: 11, weight: .heavy))
+                                .font(.system(size: 10, weight: .heavy))
                                 .foregroundColor(opt.labelColor)
-                            Text(String(opt.name.prefix(6)))
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.65))
+                            Text(String(opt.name.prefix(5)))
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.60))
                         }
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(Color.white.opacity(0.08), in: Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
                     }
+                    Spacer()
                 }
             }
-            .padding(22)
+            .padding(20)
         }
-        .frame(minHeight: 220)
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .shadow(color: Color(red: 0.118, green: 0.106, blue: 0.294).opacity(0.40), radius: 20, x: 0, y: 10)
-        .padding(.horizontal, 18).padding(.top, 8)
+        .frame(minHeight: 210)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: Color(red: 0.10, green: 0.08, blue: 0.28).opacity(0.45), radius: 18, x: 0, y: 8)
+        .padding(.horizontal, 16).padding(.top, 8)
     }
 
     // MARK: - Step 标题分隔符
