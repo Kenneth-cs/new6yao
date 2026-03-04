@@ -1,5 +1,15 @@
 import SwiftUI
 
+// 禁用系统侧滑返回手势
+private struct MatrixPopGestureDisabler: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController { UIViewController() }
+    func updateUIViewController(_ vc: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = false
+        }
+    }
+}
+
 // ============================================================
 // MARK: - 五行决策报告（STEP 结构 + 矩阵表格 + 落地手册）
 // ============================================================
@@ -61,6 +71,7 @@ struct MatrixResultViewB: View {
         .navigationTitle("决策报告")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .background(MatrixPopGestureDisabler())
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { dismiss() }) {
