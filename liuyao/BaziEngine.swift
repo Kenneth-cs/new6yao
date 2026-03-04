@@ -138,26 +138,28 @@ class BaziEngine {
     private func quantifyEnergy(pillars: FourPillars) -> [FiveElement: Double] {
         var scores: [FiveElement: Double] = [.wood: 0, .fire: 0, .earth: 0, .metal: 0, .water: 0]
 
-        // 权重定义
-        let weightSeason = 40.0 // 得令 (月支)
-        let weightStem   = 15.0 // 得势 (天干)
-        let weightBranch = 10.0 // 得地 (地支主气)
+        // 优化后的权重定义（降低月令垄断性，提升日支重要性）
+        let weightSeason = 30.0 // 得令 (月支) - 降权，避免土月独大
+        let weightStem   = 12.0 // 得势 (天干)
+        let weightDayBranch = 15.0 // 日支 (坐支) - 离日主最近，影响大
+        let weightBranch = 8.0  // 得地 (其他地支)
 
-        // 1. 得令 (月支决定性作用)
+        // 1. 得令 (月支)
         let monthElement = pillars.month.branch.mainElement
         scores[monthElement, default: 0] += weightSeason
 
         // 2. 得势 (四柱天干)
-        // ⚠️ 注意：日主天干代表被测量的"主体"本身，不计入"命局环境"的支撑力量
-        // 否则日主元素会被多算 15 分，导致旺弱判断偏旺
+        // 日主天干权重减半策略保持不变
         for p in [pillars.year, pillars.month, pillars.time] {
             scores[p.stem.element, default: 0] += weightStem
         }
-        // 日柱天干仅计一半权重（体现日主自身的根基，但不作为外力）
         scores[pillars.day.stem.element, default: 0] += weightStem * 0.5
 
         // 3. 得地 (四柱地支主气)
-        for p in [pillars.year, pillars.month, pillars.day, pillars.time] {
+        // 日支单独加权
+        scores[pillars.day.branch.mainElement, default: 0] += weightDayBranch
+        // 其他三支
+        for p in [pillars.year, pillars.month, pillars.time] {
             scores[p.branch.mainElement, default: 0] += weightBranch
         }
 
@@ -211,6 +213,101 @@ class BaziEngine {
         
         let stemIndex = (startStemIndex + hourIndex) % 10
         return HeavenlyStem.allCases[stemIndex]
+    }
+
+    // MARK: - 喜用神推算（本地传统命理规则，确定性算法）
+
+    /// 计算喜用神、忌神、急需补充能量
+    /// - Returns: (喜用神列表, 忌神列表, weakElement急需补充)
+    func calculateFavorableElements(date: Date, hour: ChineseHour) -> (favorable: [String], unfavorable: [String], weakElement: String) {
+        let scores = calculateEnergy(date: date, hour: hour)
+        let pillars = calculatePillars(date: date, hour: hour)
+        let dmEl = pillars.day.stem.element
+        let monthBranch = pillars.month.branch
+        let isColdMonth = [EarthlyBranch.hai, .zi, .chou].contains(monthBranch)
+        return BaziEngine.favorableRule(dayMaster: dmEl, scores: scores, isColdMonth: isColdMonth)
+    }
+
+    /// 核心喜用神规则引擎（静态，便于单元测试）
+    static func favorableRule(
+        dayMaster dm: FiveElement,
+        scores: [FiveElement: Double],
+        isColdMonth: Bool
+    ) -> (favorable: [String], unfavorable: [String], weakElement: String) {
+        let prt = dm.generatedBy    // 印星（生我）
+        let fod = dm.generates      // 食伤（我生）
+        let wlt = dm.controls       // 财星（我克）
+        let ofc = dm.controlledBy   // 官杀（克我）
+
+        let g: (FiveElement) -> Double = { scores[$0] ?? 0 }
+
+        // 有效强度 = 自身 - 官杀克*0.5 - 财泄*0.3 - 食伤泄*0.2 + 印生*0.3
+        let eff = g(dm) - g(ofc)*0.5 - g(wlt)*0.3 - g(fod)*0.2 + g(prt)*0.3
+        // 官克等身修正：当官杀 ≥ 日主*90% 时，日主实为竞争弱势
+        let officerContesting = g(ofc) >= g(dm) * 0.9
+        let isStrong = eff >= 0.25 && !officerContesting
+
+        var fav: [FiveElement]
+        var unf: [FiveElement]
+
+        if isStrong {
+            if g(prt) > 0.35 {
+                // 印旺助身过（如木旺生旺火）→ 财星克印 + 官杀制身
+                fav = [prt.controlledBy, ofc]
+            } else {
+                // 正常身旺 → 官杀/食伤/财中取占比最低2个，官杀优先
+                let cands = [(ofc, g(ofc), 0), (fod, g(fod), 1), (wlt, g(wlt), 2)]
+                    .sorted { $0.1 != $1.1 ? $0.1 < $1.1 : $0.2 < $1.2 }
+                fav = cands.prefix(2).map { $0.0 }
+            }
+            unf = [prt, dm]
+        } else {
+            // 水多木漂 / 金多水浑（印星过旺特殊格局）
+            let woodFloats = prt == .water && dm == .wood && g(prt) > 0.40
+            let waterMurky = prt == .metal && dm == .water && g(prt) > 0.40
+            if woodFloats || waterMurky {
+                fav = [fod, prt.controlledBy]   // 泄印（食伤）+ 克印（财）
+                unf = [prt, ofc]
+            } else if g(fod) > 0.40 {
+                // 食伤过旺泄身 → 印制食 + 冬月加火调候
+                fav = isColdMonth ? [prt, .fire] : [prt, dm]
+                unf = [fod, wlt]
+            } else {
+                // 普通身弱 → 印星 + 比劫
+                fav = [prt, dm]
+                unf = [ofc, fod]
+            }
+        }
+
+        // 去重
+        var seen = Set<FiveElement>()
+        fav = fav.filter { seen.insert($0).inserted }
+
+        // weakElement = 喜用神中占比最低的（= 最急需补充的有益能量）
+        let weakEl = fav.min(by: { g($0) < g($1) }) ?? fav[0]
+
+        return (fav.map { $0.rawValue }, unf.map { $0.rawValue }, weakEl.rawValue)
+    }
+}
+
+// MARK: - FiveElement 五行生克关系扩展
+
+extension FiveElement {
+    /// 我生（食伤星，泄我）
+    var generates: FiveElement {
+        switch self { case .wood: return .fire; case .fire: return .earth; case .earth: return .metal; case .metal: return .water; case .water: return .wood }
+    }
+    /// 生我（印星，生我）
+    var generatedBy: FiveElement {
+        switch self { case .wood: return .water; case .fire: return .wood; case .earth: return .fire; case .metal: return .earth; case .water: return .metal }
+    }
+    /// 我克（财星，我克）
+    var controls: FiveElement {
+        switch self { case .wood: return .earth; case .fire: return .metal; case .earth: return .water; case .metal: return .wood; case .water: return .fire }
+    }
+    /// 克我（官杀星，克我）
+    var controlledBy: FiveElement {
+        switch self { case .wood: return .metal; case .fire: return .water; case .earth: return .wood; case .metal: return .fire; case .water: return .earth }
     }
 }
 

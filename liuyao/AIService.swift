@@ -361,9 +361,11 @@ class AIService: ObservableObject {
         birthHour: ChineseHour = .wu,
         gender:    String = "未知"
     ) async throws -> EnergyPortraitResult {
-        // 1. 本地算法计算精确五行分值（确定性计算，不依赖 AI）
-        let localScores = BaziEngine.shared.calculateEnergy(date: birthday, hour: birthHour)
+        // 1. 本地算法：五行分值 + 日主 + 喜用神（完全确定性，不依赖 AI）
+        let localScores    = BaziEngine.shared.calculateEnergy(date: birthday, hour: birthHour)
         let localDayMaster = BaziEngine.shared.getDayMaster(date: birthday, hour: birthHour)
+        let (localFavorable, localUnfavorable, localWeakElement) =
+            BaziEngine.shared.calculateFavorableElements(date: birthday, hour: birthHour)
 
         // 2. 本地确定 dominantElement（占比最高，纯数学）
         let elementNames: [(FiveElement, String)] = [
@@ -382,75 +384,48 @@ class AIService: ObservableObject {
         formatter.dateFormat = "yyyy年MM月dd日"
         let birthdayStr = formatter.string(from: birthday)
 
-        // weakElement 不再本地硬算：它必须是"喜用神里占比最低的"，而喜用神由AI判断
-        // 因此让 AI 在拿到占比数据后，先确定喜用神，再从喜用神中选最弱的作为 weakElement
+        // 3. 只让 AI 生成 diagnosis 和 remedy 文字，其余字段全部由本地确定
         let prompt = """
-        请分析以下用户的五行能量分布：
+        请为以下用户生成五行命局的能量诊断文字：
 
         出生信息：
         - 日期：\(birthdayStr)
         - 时辰：\(birthHour.rawValue)（\(birthHour.timeRange)）
         - 性别：\(gender)
 
-        【已确定的本地计算结果，必须原样输出，不得修改】：
+        【本地已精确计算，必须原样输出这些字段，不得修改】：
         - 日主：\(localDayMaster)
-        - dominantElement（最强）：\(localDominantElement)
-        - 五行能量（已归一化，总和=1.0）：
-          木：\(woodVal)  火：\(fireVal)  土：\(earthVal)  金：\(metalVal)  水：\(waterVal)
+        - dominantElement（最强五行）：\(localDominantElement)
+        - 五行能量（总和=1.0）：木\(woodVal) 火\(fireVal) 土\(earthVal) 金\(metalVal) 水\(waterVal)
+        - favorableElements（喜用神）：\(localFavorable)
+        - unfavorableElements（忌神）：\(localUnfavorable)
+        - weakElement（急需补充）：\(localWeakElement)
 
-        【需要 AI 判断的字段】：
-        1. favorableElements：判断最有助益的 2 个五行（喜用神）
-        2. unfavorableElements：判断最需规避的 2 个五行（忌神）
-        3. weakElement：必须从 favorableElements 中选取占比最低的那个五行
-           （逻辑：急需补充的能量 = 有益但又最匮乏的元素，绝不能选忌神元素）
-        4. diagnosis：50~80字，用"你是..."开头，通俗比喻，不使用专业术语
-        5. remedy：30~50字，具体建议选择什么类型的环境/机会
+        【需要 AI 创作的字段】：
+        1. diagnosis：60~90字，用"你是..."开头，通俗比喻描述此命局特点，不用专业术语
+        2. remedy：35~55字，具体建议选择什么方向/环境/颜色/季节来补充"\(localWeakElement)"能量
 
-        【判断喜用神的核心方法】：
-        步骤一：先判断日主旺弱
-        - 月令（月支）是否帮扶日主？月支主气与日主同五行或相生为得令，否则失令
-        - 其余三柱天干地支中，帮扶（同行+生我）vs 克耗（克我+泄我）哪方多？
-        - "克压强度"：若有一行以高占比（>30%）直接克日主，日主实际能量需打折
-        步骤二：弱日主 → 喜"生我"和"帮我"的五行；强日主 → 喜"克我"（官）或"泄我"（食伤）
-        步骤三：特别注意"调候原则"仅适用于日主中等偏强时，弱日主不能强行套用调候
-           例：弱丙火（月令失令+强金克）→ 应喜木生火，而非水调候（水再克弱火是错的）
-
-        规则：
-        - weakElement 必须属于 favorableElements，不得是 unfavorableElements 中的元素
-        - wood/fire/earth/metal/water 数值必须与上方一致，不得更改
-        - dayMaster 必须等于 \(localDayMaster)，不得更改
-
-        输出 JSON（无任何额外内容）：
-        {"wood":\(woodVal),"fire":\(fireVal),"earth":\(earthVal),"metal":\(metalVal),"water":\(waterVal),"dayMaster":"\(localDayMaster)","dominantElement":"\(localDominantElement)","weakElement":"水","favorableElements":["水","木"],"unfavorableElements":["土","金"],"diagnosis":"你是...","remedy":"宜..."}
+        输出 JSON（无任何额外内容，所有字段必须存在）：
+        {"wood":\(woodVal),"fire":\(fireVal),"earth":\(earthVal),"metal":\(metalVal),"water":\(waterVal),"dayMaster":"\(localDayMaster)","dominantElement":"\(localDominantElement)","weakElement":"\(localWeakElement)","favorableElements":\(localFavorable),"unfavorableElements":\(localUnfavorable),"diagnosis":"你是...","remedy":"宜..."}
         """
 
         let rawContent = try await getPortraitAIResponse(system: portraitSystemPrompt, prompt: prompt)
-        var result = try parseMatrixJSON(from: rawContent, as: EnergyPortraitResult.self)
+        let aiResult = try parseMatrixJSON(from: rawContent, as: EnergyPortraitResult.self)
 
-        // 3. weakElement 完全由本地数据决定：喜用神中占比最低的那个（不信 AI 的选择）
-        //    逻辑：急需补充 = "对我有益 且 目前最匮乏" 的元素
-        let correctedWeak: String = result.favorableElements
-            .compactMap { name -> (String, Double)? in
-                guard let fe = FiveElement(rawValue: name) else { return nil }
-                return (name, localScores[fe] ?? 0)
-            }
-            .min(by: { $0.1 < $1.1 })?.0
-            ?? result.favorableElements.first
-            ?? result.weakElement
-
-        result = EnergyPortraitResult(
-            wood:                localScores[.wood]  ?? result.wood,
-            fire:                localScores[.fire]  ?? result.fire,
-            earth:               localScores[.earth] ?? result.earth,
-            metal:               localScores[.metal] ?? result.metal,
-            water:               localScores[.water] ?? result.water,
+        // 4. 最终合并：数值+判断全用本地，文字用 AI
+        let result = EnergyPortraitResult(
+            wood:                localScores[.wood]  ?? aiResult.wood,
+            fire:                localScores[.fire]  ?? aiResult.fire,
+            earth:               localScores[.earth] ?? aiResult.earth,
+            metal:               localScores[.metal] ?? aiResult.metal,
+            water:               localScores[.water] ?? aiResult.water,
             dayMaster:           localDayMaster,
             dominantElement:     localDominantElement,
-            weakElement:         correctedWeak,
-            favorableElements:   result.favorableElements,
-            unfavorableElements: result.unfavorableElements,
-            diagnosis:           result.diagnosis,
-            remedy:              result.remedy
+            weakElement:         localWeakElement,          // 本地算法，永远一致
+            favorableElements:   localFavorable,            // 本地算法，永远一致
+            unfavorableElements: localUnfavorable,          // 本地算法，永远一致
+            diagnosis:           aiResult.diagnosis,
+            remedy:              aiResult.remedy
         )
         return result
     }
