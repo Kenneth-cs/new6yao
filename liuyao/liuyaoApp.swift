@@ -12,23 +12,28 @@ import UserNotifications
 struct liuyaoApp: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var notificationManager = NotificationManager.shared
-    
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
-        // 设置通知代理
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
     }
-    
+
     var body: some Scene {
         WindowGroup {
-            MainTabView()  // 改为新的Tab架构
+            MainTabView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .environmentObject(notificationManager)
                 .onAppear {
-                    // 首次启动时请求通知权限
                     setupNotifications()
-                    // 清除角标
                     UIApplication.shared.applicationIconBadgeNumber = 0
                 }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                UIApplication.shared.applicationIconBadgeNumber = 0
+                // App 回到前台：清除已推送的 AI 结果通知（用户已看到）
+                AIRequestStateStore.shared.clearDeliveredAINotifications()
+            }
         }
     }
     

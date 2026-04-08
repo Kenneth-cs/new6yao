@@ -19,6 +19,8 @@ struct DecisionMatrixView: View {
     @State private var isLoadingAI = false
     @State private var showSubscriptionPrompt = false
     @State private var showLimitReached = false
+    @ObservedObject private var aiStore = AIRequestStateStore.shared
+    private let matrixKey = "matrix_latest"
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -277,6 +279,7 @@ struct DecisionMatrixView: View {
     private func analyzeWithAI() {
         isLoadingAI = true
         showAIAnalysis = true
+        aiStore.markLoading(key: matrixKey)
         
         Task {
             do {
@@ -309,11 +312,13 @@ struct DecisionMatrixView: View {
                 await MainActor.run {
                     aiAnalysis = result
                     isLoadingAI = false
+                    aiStore.markSuccess(key: matrixKey, result: result)
                 }
             } catch {
                 await MainActor.run {
                     aiAnalysis = "分析失败：\(error.localizedDescription)"
                     isLoadingAI = false
+                    aiStore.markFailed(key: matrixKey, message: aiAnalysis)
                 }
             }
         }

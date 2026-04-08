@@ -14,7 +14,13 @@ struct DivinationResultPageView: View {
     @State private var isLoading = true
     @State private var showSaveAlert = false
     @State private var divinationTime: Date = Date() // 静态分析时间
+    @ObservedObject private var aiStore = AIRequestStateStore.shared
     @StateObject private var aiService = AIService.shared
+
+    private var requestKey: String {
+        let hexBinary = tossResults.map { $0 ? "1" : "0" }.joined()
+        return "divination_\(hexBinary)_\(abs(question.hashValue))"
+    }
     @StateObject private var dataService = DataService()
     @State private var networkMonitor = NWPathMonitor()
     @State private var isNetworkAvailable = true
@@ -41,8 +47,8 @@ struct DivinationResultPageView: View {
                         Spacer()
                         
                          Button(action: {
-                             // 回到首页 - 通过回调关闭页面
                              print("[DivinationResultPageView] 点击完成按钮")
+                             aiStore.clearSlot(key: requestKey)
                              onDismiss()
                          }) {
                             Text("完成")
@@ -276,12 +282,12 @@ struct DivinationResultPageView: View {
                                     .multilineTextAlignment(.center)
                                 
                                 Button("重新解读") {
+                                    aiStore.clearSlot(key: requestKey)
                                     isLoading = true
                                     aiInterpretation = ""
                                     hexagramAnalysis = ""
                                     questionInterpretation = ""
                                     guidanceAdvice = ""
-                                    // 延迟一点重新请求
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                         requestAIInterpretation()
                                     }
@@ -439,8 +445,8 @@ struct DivinationResultPageView: View {
                             
                              // 重新分析按钮
                              Button(action: {
-                                 // 通过回调关闭页面，返回首页
                                  print("[DivinationResultPageView] 点击重新分析按钮")
+                                 aiStore.clearSlot(key: requestKey)
                                  onDismiss()
                              }) {
                                 Text("重新分析")
@@ -477,11 +483,28 @@ struct DivinationResultPageView: View {
             Text("分析结果已保存到历史记录中")
         }
         .onAppear {
-            divinationTime = Date() // 设置分析时间为当前时间
-            // 延迟执行网络相关操作，避免阻塞导航
+            divinationTime = Date()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 startNetworkMonitoring()
-                requestAIInterpretation()
+                if let slot = aiStore.slot(for: requestKey) {
+                    switch slot.status {
+                    case .loading:
+                        // 请求还在后台跑，保持 spinner 等待 Task 完成
+                        isLoading = true
+                    case .success:
+                        // 后台已拿到结果，直接渲染，不重新请求
+                        aiInterpretation       = slot.result
+                        hexagramAnalysis       = slot.hexagramAnalysis ?? ""
+                        questionInterpretation = slot.questionInterpretation ?? ""
+                        guidanceAdvice         = slot.guidanceAdvice ?? ""
+                        isLoading = false
+                    case .failed:
+                        aiInterpretation = slot.result
+                        isLoading = false
+                    }
+                } else {
+                    requestAIInterpretation()
+                }
             }
         }
         .onDisappear {
@@ -492,6 +515,7 @@ struct DivinationResultPageView: View {
     // MARK: - 私有方法
     private func requestAIInterpretation() {
         print("[DivinationResultPageView] 开始请求AI解读")
+        aiStore.markLoading(key: requestKey)
         
         // 检查网络连接
         if !isNetworkAvailable {
@@ -529,6 +553,17 @@ struct DivinationResultPageView: View {
                     self.parseAIInterpretation(interpretation)
                     self.isLoading = false
                     print("[DivinationResultPageView] UI更新完成")
+                    // parseAIInterpretation 内部有 DispatchQueue.main.async，
+                    // 延迟一个 runloop 后再写入 store 确保三个子段已更新
+                    DispatchQueue.main.async {
+                        self.aiStore.markSuccess(
+                            key: self.requestKey,
+                            result: interpretation,
+                            hexagramAnalysis: self.hexagramAnalysis,
+                            questionInterpretation: self.questionInterpretation,
+                            guidanceAdvice: self.guidanceAdvice
+                        )
+                    }
                 }
             } catch {
                 print("[DivinationResultPageView] AI解读失败: \(error.localizedDescription)")
@@ -546,6 +581,7 @@ struct DivinationResultPageView: View {
                 await MainActor.run {
                     self.aiInterpretation = "解读失败：\(errorMessage)"
                     self.isLoading = false
+                    self.aiStore.markFailed(key: self.requestKey, message: "解读失败：\(errorMessage)")
                 }
             }
         }

@@ -21,6 +21,8 @@ struct SWOTAnalysisView: View {
     @State private var isLoadingAI = false
     @State private var showSubscriptionPrompt = false
     @State private var showLimitReached = false
+    @ObservedObject private var aiStore = AIRequestStateStore.shared
+    private let swotKey = "swot_latest"
     
     private let titleMaxLength = 100
     private let fieldMaxLength = 300
@@ -276,6 +278,7 @@ struct SWOTAnalysisView: View {
     private func analyzeWithAI() {
         isLoadingAI = true
         showResult = true
+        aiStore.markLoading(key: swotKey)
         
         Task {
             do {
@@ -304,11 +307,13 @@ struct SWOTAnalysisView: View {
                 await MainActor.run {
                     aiAnalysis = result
                     isLoadingAI = false
+                    aiStore.markSuccess(key: swotKey, result: result)
                 }
             } catch {
                 await MainActor.run {
                     aiAnalysis = "分析失败：\(error.localizedDescription)"
                     isLoadingAI = false
+                    aiStore.markFailed(key: swotKey, message: aiAnalysis)
                 }
             }
         }

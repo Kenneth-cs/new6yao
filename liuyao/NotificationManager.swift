@@ -244,9 +244,12 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         let userInfo = response.notification.request.content.userInfo
         
         if let type = userInfo["type"] as? String, type == "dailyReminder" {
-            // 用户点击了每日提醒通知
             print("📱 用户点击了每日提醒通知")
-            // 可以在这里添加跳转到特定页面的逻辑
+        }
+
+        if let type = userInfo["type"] as? String, type == "aiResult" {
+            print("📱 用户点击了AI结果通知，即将呈现结果")
+            // View 仍在导航栈时会通过 AIRequestStateStore 直接渲染结果
         }
         
         // 清除角标

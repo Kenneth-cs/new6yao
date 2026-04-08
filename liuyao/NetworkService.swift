@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import UIKit
 
 class NetworkService {
     static let shared = NetworkService()
@@ -16,14 +17,14 @@ class NetworkService {
     // 火山方舟API endpoint
     private let baseURL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
     
-     // 网络配置
-     private struct NetworkConfig {
-         static let connectTimeout: TimeInterval = 15  // 减少连接超时
-         static let readTimeout: TimeInterval = 120    // 增加读取超时
-         static let maxRetries = 2                     // 减少重试次数
-         static let baseRetryDelay: TimeInterval = 2.0
-         static let maxRetryDelay: TimeInterval = 10.0
-     }
+    // 网络配置
+    private struct NetworkConfig {
+        static let connectTimeout: TimeInterval = 15  // 减少连接超时
+        static let readTimeout: TimeInterval = 180    // 增加读取超时到 3 分钟
+        static let maxRetries = 2                     // 减少重试次数
+        static let baseRetryDelay: TimeInterval = 2.0
+        static let maxRetryDelay: TimeInterval = 10.0
+    }
     
     private func setupNetworkMonitoring() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
@@ -42,6 +43,33 @@ class NetworkService {
         responseType: T.Type,
         maxRetries: Int = NetworkConfig.maxRetries
     ) async throws -> T {
+        // --- 方案一：开启后台任务以防切出App导致请求中断 ---
+        let bgTaskName = "AIRequest-\(UUID().uuidString)"
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = await MainActor.run {
+            var taskId: UIBackgroundTaskIdentifier = .invalid
+            taskId = UIApplication.shared.beginBackgroundTask(withName: bgTaskName) {
+                // 超时闭包，系统强杀前调用
+                if taskId != .invalid {
+                    UIApplication.shared.endBackgroundTask(taskId)
+                    print("[NetworkService] 后台任务 \(bgTaskName) 即将超时，清理完毕")
+                }
+            }
+            print("[NetworkService] 开启后台任务: \(bgTaskName)")
+            return taskId
+        }
+        
+        defer {
+            // 请求结束后释放后台任务
+            Task { @MainActor [bgTask] in
+                if bgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(bgTask)
+                    print("[NetworkService] 后台任务 \(bgTaskName) 已正常释放")
+                }
+            }
+        }
+        // ----------------------------------------
+        
         // 检查网络连接
         guard isNetworkAvailable else {
             print("[NetworkService] 网络不可用，无法发送请求")
