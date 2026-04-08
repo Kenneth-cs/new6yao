@@ -34,20 +34,8 @@ class NotificationManager: NSObject, ObservableObject {
         }
     }
     
-    // 每日提醒的通知标识符
-    private let dailyReminderIdentifier = "com.liuyao.dailyReminder"
-    
-    // 通知内容配置
-    private let dailyMessages: [(title: String, body: String)] = [
-        ("🌅 早安，新的一天", "与其等待运势，不如创造顺势。摇一摇，看见当下的力量。"),
-        ("💡 每日觉察", "答案不在卦象里，而在你心里。让六爻做你的镜子，照见本心。"),
-        ("🌫️ 有些迷茫？", "并不是为了预知未来，而是为了看清现在。摇一摇，换个视角看问题。"),
-        ("✨ 相信直觉", "所有的卦象都是内心的投射。摇一摇，找回你内在的确定性。"),
-        ("☯️ 顺势而为", "不在逆境中消耗，不在顺境中迷失。理解当下，才能更好地出发。"),
-        ("🎯 遇事不决", "困惑的尽头是行动。摇一摇，让古老智慧为你厘清行动的方向。"),
-        ("🧘🏻‍♂️ 此刻，向内看", "外部世界喧嚣，内心需要安宁。每日一卦，与潜意识对话。"),
-        ("💫 智慧相伴", "看见自己、理解当下。愿六爻不仅是指引，更是陪伴。")
-    ]
+    // 每日提醒通知 identifier 前缀，每天一条：前缀 + yyyyMMdd
+    private let dailyReminderPrefix = "com.liuyao.dailyReminder."
     
     private override init() {
         // 从UserDefaults读取设置
@@ -113,82 +101,85 @@ class NotificationManager: NSObject, ObservableObject {
     }
     
     // MARK: - 每日提醒
-    
-    /// 安排每日提醒（使用动态文案）
+
+    /// 开关或时间变更时调用：重新触发预调度
     func scheduleDailyReminder() {
         guard isAuthorized else {
-            print("⚠️ 未授权通知权限，无法安排提醒")
             requestAuthorization { [weak self] granted in
                 if granted { self?.scheduleDailyReminder() }
             }
             return
         }
-        // 取动态文案（有缓存用缓存，否则用本地兜底）
-        let svc = DailyNotificationContentService.shared
-        let title = svc.cachedTitle
-        let body  = svc.cachedBody
-        scheduleWith(title: title, body: body)
+        // 重置预调度日期标记，让 refreshIfNeeded 重新执行
+        UserDefaults.standard.removeObject(forKey: "notif_last_schedule_date")
+        DailyNotificationContentService.shared.refreshIfNeeded()
     }
 
-    /// 用指定文案更新明日通知（AI 生成后调用）
-    func updateContent(title: String, body: String) {
+    /// 为指定日期调度一条一次性通知（由 DailyNotificationContentService 调用）
+    func scheduleOnceFor(date: Date, title: String, body: String) {
         guard dailyReminderEnabled else { return }
-        scheduleWith(title: title, body: body)
-        print("🔔 通知文案已更新: \(title)")
-    }
 
-    /// 内部通用调度
-    private func scheduleWith(title: String, body: String) {
-        cancelDailyReminder()
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyyMMdd"
+        let identifier = dailyReminderPrefix + fmt.string(from: date)
 
         let content = UNMutableNotificationContent()
-        content.title = title
-        content.body  = body
-        content.sound = .default
-        content.badge = 1
+        content.title    = title
+        content.body     = body
+        content.sound    = .default
+        content.badge    = 1
         content.userInfo = ["type": "dailyReminder"]
 
-        var dateComponents = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
-        dateComponents.second = 0
+        // 取用户设定的时分，拼上目标日期
+        let timeParts = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
+        var dc = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        dc.hour   = timeParts.hour
+        dc.minute = timeParts.minute
+        dc.second = 0
 
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        let request = UNNotificationRequest(
-            identifier: dailyReminderIdentifier,
-            content: content,
-            trigger: trigger
-        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
+        let request  = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
 
+        // 先移除同一天旧的，再添加新的（用于 AI 替换预设）
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("❌ 安排通知失败: \(error.localizedDescription)")
+                print("❌ 调度通知失败(\(identifier)): \(error.localizedDescription)")
             } else {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "HH:mm"
-                print("✅ 每日提醒已设置：\(formatter.string(from: self.reminderTime))")
+                let fmt2 = DateFormatter(); fmt2.dateFormat = "MM-dd HH:mm"
+                if let next = trigger.nextTriggerDate() {
+                    print("✅ 通知已调度: \(title) → \(fmt2.string(from: next))")
+                }
             }
         }
     }
-    
-    /// 取消每日提醒
-    func cancelDailyReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [dailyReminderIdentifier])
-        print("🗑️ 每日提醒已取消")
+
+    /// 取消所有每日提醒（前缀匹配）
+    func cancelAllDailyReminders() {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { [weak self] requests in
+            guard let self else { return }
+            let ids = requests
+                .map(\.identifier)
+                .filter { $0.hasPrefix(self.dailyReminderPrefix) }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+            print("🗑️ 已取消 \(ids.count) 条旧提醒")
+        }
     }
-    
-    /// 获取下次提醒时间
+
+    /// 兼容旧调用（开关关闭时）
+    func cancelDailyReminder() {
+        cancelAllDailyReminders()
+    }
+
+    /// 获取下次提醒时间（取 pending 中最早触发的）
     func getNextReminderTime(completion: @escaping (Date?) -> Void) {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            if let request = requests.first(where: { $0.identifier == self.dailyReminderIdentifier }),
-               let trigger = request.trigger as? UNCalendarNotificationTrigger,
-               let nextDate = trigger.nextTriggerDate() {
-                DispatchQueue.main.async {
-                    completion(nextDate)
-                }
-            } else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
-            }
+        UNUserNotificationCenter.current().getPendingNotificationRequests { [weak self] requests in
+            guard let self else { completion(nil); return }
+            let next = requests
+                .filter { $0.identifier.hasPrefix(self.dailyReminderPrefix) }
+                .compactMap { ($0.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() }
+                .min()
+            DispatchQueue.main.async { completion(next) }
         }
     }
     

@@ -1,16 +1,6 @@
 import SwiftUI
 import Network
 
-// 禁用系统侧滑返回手势，防止左右拖动出现空白
-private struct PopGestureDisabler: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> UIViewController { UIViewController() }
-    func updateUIViewController(_ vc: UIViewController, context: Context) {
-        DispatchQueue.main.async {
-            vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = false
-        }
-    }
-}
-
 struct DivinationResultPageView: View {
     let question: String
     let tossResults: [Bool]
@@ -477,10 +467,10 @@ struct DivinationResultPageView: View {
             }
             .frame(maxWidth: .infinity)
         }
+        .clipped()                          // 裁剪防止横向拖出空白
         .navigationTitle("分析结果")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .background(PopGestureDisabler())
         .alert("保存成功", isPresented: $showSaveAlert) {
             Button("确定", role: .cancel) { }
         } message: {
