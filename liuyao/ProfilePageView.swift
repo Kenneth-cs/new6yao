@@ -1557,9 +1557,6 @@ struct FeatureItem: View {
 // MARK: - 隐私设置视图
 struct PrivacySettingsView: View {
     @Environment(\.presentationMode) var presentationMode
-    @State private var dataCollectionEnabled = true
-    @State private var analyticsEnabled = false
-    @State private var crashReportsEnabled = true
     @State private var locationDataEnabled = true
     @State private var notificationEnabled = true
     
@@ -1598,29 +1595,6 @@ struct PrivacySettingsView: View {
                         }
                     }
                     .padding(.top, 20)
-                    
-                    // 数据收集设置
-                    PrivacySection(title: "数据收集", icon: "doc.text.fill", color: .blue) {
-                        VStack(spacing: 16) {
-                            PrivacyToggleRow(
-                                title: "基础数据收集",
-                                description: "收集应用使用数据以改善用户体验",
-                                isOn: $dataCollectionEnabled
-                            )
-                            
-                            PrivacyToggleRow(
-                                title: "使用分析",
-                                description: "匿名收集使用统计信息",
-                                isOn: $analyticsEnabled
-                            )
-                            
-                            PrivacyToggleRow(
-                                title: "崩溃报告",
-                                description: "自动发送崩溃报告帮助修复问题",
-                                isOn: $crashReportsEnabled
-                            )
-                        }
-                    }
                     
                     // 位置和通知设置
                     PrivacySection(title: "位置和通知", icon: "location.fill", color: .orange) {
@@ -1747,7 +1721,6 @@ struct PrivacySettingsView: View {
                     presentationMode.wrappedValue.dismiss()
                 },
                 trailing: Button("保存") {
-                    // 保存设置
                     presentationMode.wrappedValue.dismiss()
                 }
                 .fontWeight(.semibold)

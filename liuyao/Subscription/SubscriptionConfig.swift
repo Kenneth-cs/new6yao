@@ -134,18 +134,27 @@ struct SubscriptionConfig {
     }
     
     // MARK: - 分析埋点事件
-    
-    /// 用于统计分析的事件名称
+
     struct AnalyticsEvents {
-        static let viewSubscriptionPage = "view_subscription_page"
-        static let clickUpgradeButton = "click_upgrade_button"
-        static let startPurchase = "start_purchase"
-        static let completePurchase = "complete_purchase"
-        static let cancelPurchase = "cancel_purchase"
-        static let restorePurchase = "restore_purchase"
-        static let hitUsageLimit = "hit_usage_limit"
-        static let viewSubscriptionPrompt = "view_subscription_prompt"
-        static let dismissSubscriptionPrompt = "dismiss_subscription_prompt"
+        static let divinationClickStart = "divination_click_start"
+        static let divinationTossCoin = "divination_toss_coin"
+        static let divinationViewResult = "divination_view_result"
+        static let matrixClickNew = "matrix_click_new"
+        static let matrixSubmit = "matrix_submit"
+        static let matrixViewResult = "matrix_view_result"
+        static let decisionInputBirthday = "decision_input_birthday"
+        static let decisionClickRecalculate = "decision_click_recalculate"
+        static let decisionClickDecide = "decision_click_decide"
+        static let swotClickNew = "swot_click_new"
+        static let swotSubmit = "swot_submit"
+        static let swotViewResult = "swot_view_result"
+        static let learningViewArticle = "learning_view_article"
+        static let profileViewHistory = "profile_view_history"
+        static let limitReachedShow = "limit_reached_show"
+        static let paywallView = "paywall_view"
+        static let paywallClickBuy = "paywall_click_buy"
+        static let paywallPaySuccess = "paywall_pay_success"
+        static let paywallRestore = "paywall_restore"
     }
     
     // MARK: - 辅助方法

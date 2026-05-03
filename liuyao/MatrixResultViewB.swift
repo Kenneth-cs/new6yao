@@ -76,6 +76,18 @@ struct MatrixResultViewB: View {
                 }
             }
         }
+        .onAppear {
+            AnalyticsManager.shared.incrementMatrixCount()
+            let topScore = result.recommendedOption?.score ?? 0
+            let level: String
+            switch topScore {
+            case 80...: level = "大吉"
+            case 60..<80: level = "小吉"
+            case 40..<60: level = "平"
+            default: level = "凶"
+            }
+            AnalyticsManager.shared.trackMatrixResult(hasVeto: result.hasFatalRisk, topScoreLevel: level)
+        }
     }
 
     // MARK: - 顶部头图（重新设计）

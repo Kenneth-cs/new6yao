@@ -102,6 +102,9 @@ struct EnergyPortraitView: View {
                             NavigationLink(destination: ScenarioSelectionView(portrait: p)) {
                                 stickyDecisionButton(p)
                             }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                AnalyticsManager.shared.trackDecisionClickDecide()
+                            })
                             .padding(.horizontal, 20)
                             .disabled(isAnalyzing)
                         }
@@ -197,6 +200,7 @@ struct EnergyPortraitView: View {
                         Button(action: {
                             BirthInfoStore.shared.clearPortraitCache()
                             portrait = nil
+                            AnalyticsManager.shared.trackDecisionClickRecalculate()
                             analyzePortrait()
                         }) {
                             Text("重新推算")
@@ -493,9 +497,10 @@ struct EnergyPortraitView: View {
                     selectedBirthday = tempBirthday
                     selectedHour     = tempHour
                     BirthInfoStore.shared.save(birthday: tempBirthday, hour: tempHour)
-                    BirthInfoStore.shared.clearPortraitCache()  // 生辰变更，清除旧缓存
-                    portrait = nil                               // 清空当前显示
+                    BirthInfoStore.shared.clearPortraitCache()
+                    portrait = nil
                     showBirthdayPicker = false
+                    AnalyticsManager.shared.trackDecisionInputBirthday()
                     analyzePortrait()
                 }) {
                     HStack(spacing: 8) {

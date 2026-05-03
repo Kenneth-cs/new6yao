@@ -37,6 +37,9 @@ struct ArticleDetailView: View {
         }
         .navigationTitle("文章详情")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            AnalyticsManager.shared.trackLearningViewArticle(articleId: "\(article.id)")
+        }
         // 分享功能暂时隐藏
         // .toolbar {
         //     ToolbarItem(placement: .navigationBarTrailing) {

@@ -102,6 +102,16 @@ struct LimitReachedView: View {
                 }
             }
         }
+        .onAppear {
+            let source: String
+            switch limitType {
+            case .dailyDivination: source = "摇卦"
+            case .monthlySWOT: source = "SWOT"
+            case .monthlyMatrix: source = "矩阵"
+            case .historyRecords: source = "历史记录"
+            }
+            AnalyticsManager.shared.trackLimitReachedShow(triggerSource: source)
+        }
         .fullScreenCover(isPresented: $showSubscriptionDetail) {
             NavigationStack {
                 SubscriptionDetailView(initialSelectedTier: selectedTier)

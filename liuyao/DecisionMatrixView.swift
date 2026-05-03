@@ -80,6 +80,9 @@ struct DecisionMatrixView: View {
         .sheet(isPresented: $showAddOption) {
             AddOptionView(options: $options)
         }
+        .onAppear {
+            AnalyticsManager.shared.trackMatrixNew(scenario: problemTitle.isEmpty ? "未填写" : problemTitle)
+        }
     }
     
     // MARK: - UI Components
@@ -265,13 +268,11 @@ struct DecisionMatrixView: View {
     // MARK: - Methods
     
     private func checkPermissionAndAnalyze() {
-        // 检查使用权限
         if permissionManager.canUseMatrix() {
-            // 有权限，增加计数并开始分析
             permissionManager.incrementMatrixCount()
+            AnalyticsManager.shared.trackMatrixSubmit(optionsCount: options.count)
             analyzeWithAI()
         } else {
-            // 无权限，显示限制提示
             showLimitReached = true
         }
     }

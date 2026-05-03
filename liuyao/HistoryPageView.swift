@@ -65,7 +65,10 @@ struct HistoryPageView: View {
                 .disabled(currentTabEmpty)
             }
         }
-        .onAppear { loadAll() }
+        .onAppear {
+            loadAll()
+            AnalyticsManager.shared.trackProfileViewHistory(recordType: selectedTab == 2 ? "矩阵" : selectedTab == 1 ? "摇卦" : "全部")
+        }
     }
 
     // ── 当前 Tab 内容 ────────────────────────────────────────

@@ -145,14 +145,14 @@ class SubscriptionService: ObservableObject {
             
             switch result {
             case .success(let verification):
-                // 验证交易
                 let transaction = try checkVerified(verification)
                 
-                // 更新订阅状态
                 await updateSubscriptionStatus()
                 
-                // 完成交易
                 await transaction.finish()
+                
+                let planType = product.id == SubscriptionConfig.proMonthlyProductID ? "monthly" : "yearly"
+                AnalyticsManager.shared.trackPaywallPaySuccess(planType: planType)
                 
                 print("✅ 购买成功：\(product.displayName)")
                 isPurchasing = false
@@ -316,6 +316,7 @@ class SubscriptionService: ObservableObject {
                 
                 subscriptionStatus = status
                 permissionManager.updateSubscriptionStatus(status)
+                AnalyticsManager.shared.updateSubscriptionStatus(activeTier.rawValue)
                 
                 print("✅ 订阅状态：\(activeTier.displayName)")
                 print("   购买时间：\(transaction.purchaseDate.description)")
@@ -334,9 +335,9 @@ class SubscriptionService: ObservableObject {
             }
             
         } else {
-            // 无有效订阅，使用免费版
             subscriptionStatus = nil
             permissionManager.updateSubscriptionTier(.free)
+            AnalyticsManager.shared.updateSubscriptionStatus("free")
             print("ℹ️ 当前为免费版")
         }
         

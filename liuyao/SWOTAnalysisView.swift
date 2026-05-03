@@ -21,6 +21,7 @@ struct SWOTAnalysisView: View {
     @State private var isLoadingAI = false
     @State private var showSubscriptionPrompt = false
     @State private var showLimitReached = false
+    @State private var swotStartTime: Date?
     @ObservedObject private var aiStore = AIRequestStateStore.shared
     private let swotKey = "swot_latest"
     
@@ -83,6 +84,9 @@ struct SWOTAnalysisView: View {
                 remaining: permissionManager.getMonthlySWOTRemaining(),
                 resetTime: Calendar.current.date(byAdding: .month, value: 1, to: Date())
             )
+        }
+        .onAppear {
+            AnalyticsManager.shared.trackSwotNew()
         }
     }
     
@@ -264,13 +268,11 @@ struct SWOTAnalysisView: View {
     // MARK: - Methods
     
     private func checkPermissionAndAnalyze() {
-        // 检查使用权限
         if permissionManager.canUseSWOT() {
-            // 有权限，增加计数并开始分析
             permissionManager.incrementSWOTCount()
+            AnalyticsManager.shared.trackSwotSubmit()
             analyzeWithAI()
         } else {
-            // 无权限，显示限制提示
             showLimitReached = true
         }
     }
@@ -278,6 +280,7 @@ struct SWOTAnalysisView: View {
     private func analyzeWithAI() {
         isLoadingAI = true
         showResult = true
+        swotStartTime = Date()
         aiStore.markLoading(key: swotKey)
         
         Task {
@@ -308,6 +311,8 @@ struct SWOTAnalysisView: View {
                     aiAnalysis = result
                     isLoadingAI = false
                     aiStore.markSuccess(key: swotKey, result: result)
+                    let waitMs = Int(Date().timeIntervalSince(swotStartTime ?? Date()) * 1000)
+                    AnalyticsManager.shared.trackSwotResult(waitTimeMs: waitMs)
                 }
             } catch {
                 await MainActor.run {

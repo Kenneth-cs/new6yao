@@ -484,6 +484,7 @@ struct DivinationResultPageView: View {
         }
         .onAppear {
             divinationTime = Date()
+            AnalyticsManager.shared.incrementDivinationCount()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 startNetworkMonitoring()
                 if let slot = aiStore.slot(for: requestKey) {
@@ -552,9 +553,13 @@ struct DivinationResultPageView: View {
                     self.aiInterpretation = interpretation
                     self.parseAIInterpretation(interpretation)
                     self.isLoading = false
-                    print("[DivinationResultPageView] UI更新完成")
-                    // parseAIInterpretation 内部有 DispatchQueue.main.async，
-                    // 延迟一个 runloop 后再写入 store 确保三个子段已更新
+                    let waitMs = Int(Date().timeIntervalSince(self.divinationTime) * 1000)
+                    let usageStats = UserDefaults.standard.usageStatistics
+                    AnalyticsManager.shared.trackDivinationResult(
+                        hexagramName: self.hexagramData.name,
+                        waitTimeMs: waitMs,
+                        dailyCurrentCount: usageStats.dailyDivinationCount
+                    )
                     DispatchQueue.main.async {
                         self.aiStore.markSuccess(
                             key: self.requestKey,

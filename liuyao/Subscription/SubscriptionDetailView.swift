@@ -114,7 +114,6 @@ struct SubscriptionDetailView: View {
             Text(errorMessage)
         }
         .onAppear {
-            // 根据传入的初始选择或默认选中月订阅
             if selectedProduct == nil {
                 if let initialTier = initialSelectedTier {
                     switch initialTier {
@@ -129,6 +128,7 @@ struct SubscriptionDetailView: View {
                     selectedProduct = subscriptionService.monthlyProduct
                 }
             }
+            AnalyticsManager.shared.trackPaywallView(triggerSource: initialSelectedTier != nil ? "限制拦截" : "个人中心")
         }
     }
     
@@ -190,6 +190,8 @@ struct SubscriptionDetailView: View {
     private func purchaseButton(for product: Product) -> some View {
         Button(action: {
             Task {
+                let planType = product.id == SubscriptionConfig.proMonthlyProductID ? "monthly" : "yearly"
+                AnalyticsManager.shared.trackPaywallClickBuy(planType: planType, price: product.displayPrice)
                 await purchaseProduct(product)
             }
         }) {
@@ -293,6 +295,7 @@ struct SubscriptionDetailView: View {
         await subscriptionService.restorePurchases()
         
         if subscriptionService.isPro {
+            AnalyticsManager.shared.trackPaywallRestore()
             showingRestoreAlert = true
         } else {
             errorMessage = "未找到可恢复的购买记录"

@@ -434,6 +434,8 @@ struct CoinTossPageView: View {
             self.tossResults.append(result)
             self.currentAnimationIndex += 1
             
+            AnalyticsManager.shared.trackDivinationToss(tossCount: self.tossResults.count)
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.performNextToss()
             }

@@ -154,6 +154,7 @@ struct DivinationPageView: View {
                 .opacity((question.isEmpty && defaultQuestion == nil) ? 0.6 : 1.0)
                 .simultaneousGesture(TapGesture().onEnded {
                     divinationStartTime = Date()
+                    AnalyticsManager.shared.trackDivinationStart()
                 })
                 
                 Spacer()
