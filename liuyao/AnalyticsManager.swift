@@ -16,13 +16,8 @@ final class AnalyticsManager {
     private let userDefaults = UserDefaults.standard
     private let consentKey = "analytics_consent"
     
-    #if DEBUG
-    private let kApiBase = "http://localhost:3000"
-    private let kApiKey = "cplt_f80096991351edc6bce97606bdf9b8c2fa41286e8b59d948c0b146c38e2c6dd1"
-    #else
     private let kApiBase = "https://www.superindividual.youqukeji.cn"
     private let kApiKey = "cplt_eaba68f209da8b4c7f3a3db351a13cec41164ebaa536ea66ecb7eef6426da99b"
-    #endif
     
     private init() {
         loadConsentState()
@@ -60,7 +55,7 @@ final class AnalyticsManager {
         }
         
         let body: [String: Any] = [
-            "projectId": "cmobq4d5g0001q7ggz7i71jjt",
+            "projectId": "cmo9rslbz0001p6ialtgfhlv5",
             "deviceId": UIDevice.current.identifierForVendor?.uuidString ?? "unknown",
             "eventId": eventId,
             "eventName": name,
