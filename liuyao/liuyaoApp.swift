@@ -21,6 +21,9 @@ struct liuyaoApp: App {
             UserDefaults.standard.set(true, forKey: "analytics_consent_has_set")
         }
         AnalyticsManager.shared.initialize()
+        
+        // 触发一次 CloudKit 配置拉取
+        _ = ConfigManager.shared
     }
 
     var body: some Scene {

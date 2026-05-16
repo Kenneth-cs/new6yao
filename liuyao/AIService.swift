@@ -29,7 +29,7 @@ class AIService: ObservableObject {
         )
         
         let requestBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 [
                     "role": "user",
@@ -92,7 +92,7 @@ class AIService: ObservableObject {
         )
         
         let requestBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 [
                     "role": "user",
@@ -135,7 +135,7 @@ class AIService: ObservableObject {
     // 添加简化的测试方法
     func testAPIConnection() async throws -> String {
         let testBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 [
                     "role": "user",
@@ -177,7 +177,7 @@ class AIService: ObservableObject {
         )
         
         let requestBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 [
                     "role": "user",
@@ -304,7 +304,7 @@ class AIService: ObservableObject {
     /// 简单的AI响应方法，用于思维工具等场景
     func getSimpleAIResponse(prompt: String) async throws -> String {
         let requestBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 [
                     "role": "user",
@@ -534,7 +534,7 @@ class AIService: ObservableObject {
     /// 专用于能量画像分析：temperature=0 确保喜用神等判断尽量稳定
     private func getPortraitAIResponse(system: String, prompt: String) async throws -> String {
         let requestBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user",   "content": prompt]
@@ -554,7 +554,7 @@ class AIService: ObservableObject {
 
     private func getMatrixAIResponse(system: String, prompt: String) async throws -> String {
         let requestBody: [String: Any] = [
-            "model": "deepseek-v3-250324",
+            "model": ConfigManager.shared.modelEndpoint,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user",   "content": prompt]

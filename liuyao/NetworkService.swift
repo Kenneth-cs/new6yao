@@ -12,8 +12,10 @@ class NetworkService {
         setupNetworkMonitoring()
     }
     
-    // DeepSeek V3 API配置
-    private let apiKey = "b6dbf75f-d0f0-4d17-8f29-62a3d9c20ff8"
+    // DeepSeek V3 API配置 (优先从 ConfigManager 读取动态配置)
+    private var apiKey: String {
+        return ConfigManager.shared.apiKey
+    }
     // 火山方舟API endpoint
     private let baseURL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
     
