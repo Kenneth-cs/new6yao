@@ -58,7 +58,7 @@
 | :--- | :--- | :--- | :--- |
 | `divination_click_start` | 点击起卦 | 在摇卦 Tab 点击开始起卦时 | 无 |
 | `divination_toss_coin` | 掷铜钱 | 用户摇动手机或点击掷币时 | `toss_count` (第几次掷币，1-6) |
-| `divination_view_result` | 查看卦象结果 | AI生成解卦结果并展示时 | `hexagram_name` (本卦名称，如：乾为天)<br>`wait_time_ms` (AI生成耗时)<br>`daily_current_count` (这是该用户今天的第几次摇卦) |
+| `divination_view_result` | 查看卦象结果 | AI生成解卦结果并展示时 | `hexagram_name` (本卦名称，如：乾为天)<br>`wait_time_ms` (AI生成耗时)<br>`daily_current_count` (这是该用户今天的第几次摇卦)<br>`user_question` (用户输入的摇卦问题全文)<br>`ai_interpretation` (AI 生成的解卦结果全文)<br>`user_latitude` (用户纬度)<br>`user_longitude` (用户经度)<br>`user_city` (用户所在城市) |
 
 ### 4.2 核心动作二：五行决策矩阵 (Five Elements Matrix)
 分析 V2.x 核心主打功能的使用深度与场景偏好。
@@ -70,7 +70,7 @@
 | `decision_click_decide` | 点击告诉我纠结 | 在决策 Tab 点击「告诉我你在纠结什么」进入场景选择时 | 无 |
 | `matrix_click_new` | 发起矩阵分析 | 在决策 Tab 点击新建矩阵分析时 | `scenario` (职场/投资/置业/情感/自定义) |
 | `matrix_submit` | 提交选项分析 | 录入完选项，点击开始计算时 | `options_count` (对比的选项数量) |
-| `matrix_view_result` | 查看矩阵结果 | 动画结束，展示最终得分与建议时 | `has_veto` (true/false，是否触发一票否决/熔断)<br>`top_score_level` (最高分区间，如：大吉/小吉/凶) |
+| `matrix_view_result` | 查看矩阵结果 | 动画结束，展示最终得分与建议时 | `has_veto` (true/false，是否触发一票否决/熔断)<br>`top_score_level` (最高分区间，如：大吉/小吉/凶)<br>`user_question` (用户输入的五行矩阵问题全文)<br>`ai_result` (AI 生成的五行矩阵分析结果全文)<br>`user_latitude` (用户纬度)<br>`user_longitude` (用户经度)<br>`user_city` (用户所在城市) |
 
 ### 4.3 核心动作三：SWOT 分析 (SWOT Analysis)
 分析辅助思考工具的使用率。
@@ -110,8 +110,11 @@
 | `subscription_status` | 订阅状态 | 购买成功或过期时更新 (free/pro_monthly/pro_yearly) |
 | `total_divination_count` | 累计摇卦次数 | 每次成功完成摇卦后更新 (+1) |
 | `total_matrix_count` | 累计矩阵分析次数 | 每次成功完成五行矩阵后更新 (+1) |
-<!-- [缺失] 实际代码中还有 total_swot_count，此处应补上 -->
+| `total_swot_count` | 累计SWOT分析次数 | 每次成功完成SWOT分析后更新 (+1) |
 | `days_since_install` | 安装至今的天数 | 每日首次启动时计算更新 |
+| `user_latitude` | 用户最新纬度 | 每次触发核心事件时更新（需用户授权定位权限） |
+| `user_longitude` | 用户最新经度 | 每次触发核心事件时更新（需用户授权定位权限） |
+| `user_city` | 用户所在城市 | 每次触发核心事件时更新（根据经纬度反解） |
 
 ---
 

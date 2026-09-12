@@ -145,8 +145,10 @@ class NetworkService {
         body: [String: Any],
         responseType: T.Type
     ) async throws -> T {
-        // 使用系统默认URLSession，避免配置问题
-        let session = URLSession.shared
+        // 使用不走代理的 URLSession，避免本地代理（如 Clash/V2Ray）拦截导致 TLS 错误
+        let sessionConfig = URLSessionConfiguration.ephemeral
+        sessionConfig.connectionProxyDictionary = [:]
+        let session = URLSession(configuration: sessionConfig)
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

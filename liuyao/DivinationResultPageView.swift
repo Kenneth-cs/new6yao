@@ -558,7 +558,9 @@ struct DivinationResultPageView: View {
                     AnalyticsManager.shared.trackDivinationResult(
                         hexagramName: self.hexagramData.name,
                         waitTimeMs: waitMs,
-                        dailyCurrentCount: usageStats.dailyDivinationCount
+                        dailyCurrentCount: usageStats.dailyDivinationCount,
+                        userQuestion: self.question,
+                        aiInterpretation: interpretation
                     )
                     DispatchQueue.main.async {
                         self.aiStore.markSuccess(

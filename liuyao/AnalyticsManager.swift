@@ -15,8 +15,13 @@ final class AnalyticsManager {
     private var userProperties: [String: Any] = [:]
     private let userDefaults = UserDefaults.standard
     private let consentKey = "analytics_consent"
+
+    // MARK: - 用户定位缓存（由 LocationManager 同步）
+    private var cachedLatitude: Double?
+    private var cachedLongitude: Double?
+    private var cachedCity: String?
     
-    private let kApiBase = "https://www.superindividual.youqukeji.cn"
+    private let kApiBase = "https://www.superindividual.originapex.cn"
     private let kApiKey = "cplt_eaba68f209da8b4c7f3a3db351a13cec41164ebaa536ea66ecb7eef6426da99b"
     
     private init() {
@@ -46,13 +51,28 @@ final class AnalyticsManager {
     
     // MARK: - 事件追踪
     
+    /// 由 LocationManager 调用，同步定位到埋点缓存
+    func updateLocation(latitude: Double, longitude: Double, city: String) {
+        cachedLatitude = latitude
+        cachedLongitude = longitude
+        cachedCity = city
+        setUserProperty("user_latitude", value: latitude)
+        setUserProperty("user_longitude", value: longitude)
+        setUserProperty("user_city", value: city)
+    }
+
     func track(_ eventId: String, name: String, params: [String: Any] = [:]) {
         guard isEnabled else { return }
-        
+
         var allParams = params
         for (key, value) in userProperties {
             allParams[key] = value
         }
+
+        // 自动注入定位参数（如有）
+        if let lat = cachedLatitude { allParams["user_latitude"] = lat }
+        if let lng = cachedLongitude { allParams["user_longitude"] = lng }
+        if let city = cachedCity { allParams["user_city"] = city }
         
         let body: [String: Any] = [
             "projectId": "cmo9rslbz0001p6ialtgfhlv5",
@@ -116,12 +136,15 @@ final class AnalyticsManager {
         track(SubscriptionConfig.AnalyticsEvents.divinationTossCoin, name: "掷铜钱", params: ["toss_count": tossCount])
     }
     
-    func trackDivinationResult(hexagramName: String, waitTimeMs: Int, dailyCurrentCount: Int) {
-        track(SubscriptionConfig.AnalyticsEvents.divinationViewResult, name: "查看卦象结果", params: [
+    func trackDivinationResult(hexagramName: String, waitTimeMs: Int, dailyCurrentCount: Int, userQuestion: String? = nil, aiInterpretation: String? = nil) {
+        var params: [String: Any] = [
             "hexagram_name": hexagramName,
             "wait_time_ms": waitTimeMs,
             "daily_current_count": dailyCurrentCount
-        ])
+        ]
+        if let q = userQuestion { params["user_question"] = q }
+        if let a = aiInterpretation { params["ai_interpretation"] = a }
+        track(SubscriptionConfig.AnalyticsEvents.divinationViewResult, name: "查看卦象结果", params: params)
     }
     
     func trackMatrixNew(scenario: String) {
@@ -144,11 +167,14 @@ final class AnalyticsManager {
         track(SubscriptionConfig.AnalyticsEvents.matrixSubmit, name: "提交选项分析", params: ["options_count": optionsCount])
     }
     
-    func trackMatrixResult(hasVeto: Bool, topScoreLevel: String) {
-        track(SubscriptionConfig.AnalyticsEvents.matrixViewResult, name: "查看矩阵结果", params: [
+    func trackMatrixResult(hasVeto: Bool, topScoreLevel: String, userQuestion: String? = nil, aiResult: String? = nil) {
+        var params: [String: Any] = [
             "has_veto": hasVeto,
             "top_score_level": topScoreLevel
-        ])
+        ]
+        if let q = userQuestion { params["user_question"] = q }
+        if let a = aiResult { params["ai_result"] = a }
+        track(SubscriptionConfig.AnalyticsEvents.matrixViewResult, name: "查看矩阵结果", params: params)
     }
     
     func trackSwotNew() {
@@ -208,6 +234,11 @@ final class AnalyticsManager {
     func incrementMatrixCount() {
         let current = userProperties["total_matrix_count"] as? Int ?? 0
         setUserProperty("total_matrix_count", value: current + 1)
+    }
+
+    func incrementSwotCount() {
+        let current = userProperties["total_swot_count"] as? Int ?? 0
+        setUserProperty("total_swot_count", value: current + 1)
     }
     
     func updateDaysSinceInstall() {

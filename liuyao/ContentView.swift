@@ -370,6 +370,16 @@ struct ContentView: View {
         .onAppear {
             locationManager.requestLocation()
         }
+        .onChange(of: locationManager.currentCity) { city in
+            // 同步定位到埋点管理器
+            if let loc = locationManager.currentLocation, !city.isEmpty, city != "定位中..." {
+                AnalyticsManager.shared.updateLocation(
+                    latitude: loc.coordinate.latitude,
+                    longitude: loc.coordinate.longitude,
+                    city: city
+                )
+            }
+        }
     }
     
     // 添加默认问题生成函数
