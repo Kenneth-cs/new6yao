@@ -408,6 +408,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于语音追问，录制您的提问内容";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "liuyao.app 需要访问您的相册，以便保存海报";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于语音追问，将您的问题转换为文字发送给追问教练";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -445,6 +446,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于语音追问，录制您的提问内容";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "liuyao.app 需要访问您的相册，以便保存海报";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于语音追问，将您的问题转换为文字发送给追问教练";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

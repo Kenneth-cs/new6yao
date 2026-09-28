@@ -50,6 +50,7 @@ struct ToastConfig {
 struct ToastView: View {
     let config: ToastConfig
     @Binding var isShowing: Bool
+    var bottomPadding: CGFloat = 50
     
     var body: some View {
         VStack {
@@ -83,21 +84,38 @@ struct ToastView: View {
                 }
             }
         }
-        .padding(.bottom, 50)
+        .padding(.bottom, bottomPadding)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isShowing)
     }
 }
 
 // MARK: - View扩展：简化Toast使用
 extension View {
-    func toast(config: ToastConfig?, isShowing: Binding<Bool>) -> some View {
+    func toast(config: ToastConfig?, isShowing: Binding<Bool>, bottomPadding: CGFloat = 50) -> some View {
         ZStack {
             self
             
             if let config = config {
-                ToastView(config: config, isShowing: isShowing)
+                ToastView(config: config, isShowing: isShowing, bottomPadding: bottomPadding)
             }
         }
+    }
+
+    func toastHost(bottomPadding: CGFloat = 50) -> some View {
+        modifier(ToastHostModifier(bottomPadding: bottomPadding))
+    }
+}
+
+private struct ToastHostModifier: ViewModifier {
+    @ObservedObject var manager = ToastManager.shared
+    var bottomPadding: CGFloat
+
+    func body(content: Content) -> some View {
+        content.toast(
+            config: manager.toastConfig,
+            isShowing: $manager.isShowing,
+            bottomPadding: bottomPadding
+        )
     }
 }
 

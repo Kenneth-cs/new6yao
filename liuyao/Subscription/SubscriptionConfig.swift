@@ -160,6 +160,14 @@ struct SubscriptionConfig {
         static let paywallClickBuy = "paywall_click_buy"
         static let paywallPaySuccess = "paywall_pay_success"
         static let paywallRestore = "paywall_restore"
+        static let shareSheetOpened = "share_sheet_opened"
+        static let posterGenerateStart = "poster_generate_start"
+        static let posterSaveSuccess = "poster_save_success"
+        static let posterSaveFail = "poster_save_fail"
+        static let pdfExportStart = "pdf_export_start"
+        static let pdfGenerateSuccess = "pdf_generate_success"
+        static let pdfGenerateFail = "pdf_generate_fail"
+        static let shareSheetDismissed = "share_sheet_dismissed"
     }
     
     // MARK: - 辅助方法

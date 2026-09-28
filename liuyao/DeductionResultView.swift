@@ -14,6 +14,8 @@ struct DeductionResultView: View {
     @State private var saveAlertMessage = ""
     @State private var showFullBasis = false
     @State private var basisPathId: String?
+    @State private var showShareExport = false
+    @State private var shareActionTaken: ShareActionTaken = .none
     
     private static let disclaimerText = "本推演基于本次卦象与已知背景，仅供参考，不代表确定结果。"
     /// 比纯黑浅一档，比系统浅灰深，用来读长段正文。
@@ -74,6 +76,23 @@ struct DeductionResultView: View {
         .sheet(isPresented: $showFullBasis) {
             fullBasisSheet
         }
+        .sheet(isPresented: $showShareExport, onDismiss: {
+            AnalyticsManager.shared.trackShareSheetDismissed(
+                sourcePage: ShareSourcePage.deduction.rawValue,
+                actionTaken: shareActionTaken.rawValue
+            )
+        }) {
+            ShareExportSheet(payload: sharePayload, onPosterSaved: {
+                shareActionTaken = .poster
+                showShareExport = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    ToastManager.shared.showSuccess("海报已保存到相册")
+                }
+            }, onPDFReady: {
+                shareActionTaken = .pdf
+            })
+        }
+        .toastHost(bottomPadding: 96)
     }
     
     // MARK: - Header
@@ -337,13 +356,40 @@ struct DeductionResultView: View {
     }
     
     // MARK: - Bottom
+    private var sharePayload: SharePayload {
+        .deduction(DeductionShareContent(
+            report: report,
+            hexagramName: hexagramName,
+            displayQuestion: displayQuestion
+        ))
+    }
+
+    private func openShareExport() {
+        shareActionTaken = .none
+        showShareExport = true
+        AnalyticsManager.shared.trackShareSheetOpened(sourcePage: ShareSourcePage.deduction.rawValue)
+    }
+
     private var bottomBar: some View {
-        HStack(spacing: 12) {
+        ViewThatFits(in: .horizontal) {
+            deductionActionRow(shareTitle: "分享")
+            deductionActionRow(shareTitle: nil)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color(.systemBackground))
+    }
+
+    private func deductionActionRow(shareTitle: String?) -> some View {
+        HStack(spacing: 8) {
             Button(action: onEditBackground) {
                 Text("修改背景")
                     .font(.headline)
                     .fontWeight(.medium)
                     .foregroundColor(ResultTheme.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(
@@ -352,11 +398,35 @@ struct DeductionResultView: View {
                     )
             }
             .buttonStyle(.plain)
-            
+
+            Button(action: openShareExport) {
+                HStack(spacing: shareTitle == nil ? 0 : 4) {
+                    Image(systemName: "square.and.arrow.up")
+                    if let shareTitle {
+                        Text(shareTitle)
+                    }
+                }
+                .font(.headline)
+                .fontWeight(.medium)
+                .foregroundColor(ResultTheme.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, shareTitle == nil ? 16 : 12)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(ResultTheme.primary.opacity(0.4), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("分享")
+
             Button(action: saveReport) {
                 Text("保存推演")
                     .font(.headline)
                     .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(
@@ -366,10 +436,6 @@ struct DeductionResultView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(Color(.systemBackground))
     }
     
     private var fullBasisSheet: some View {

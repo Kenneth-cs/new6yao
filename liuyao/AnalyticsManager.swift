@@ -279,6 +279,63 @@ final class AnalyticsManager {
     func trackPaywallRestore() {
         track(SubscriptionConfig.AnalyticsEvents.paywallRestore, name: "恢复购买")
     }
+
+    func trackShareSheetOpened(sourcePage: String) {
+        track(SubscriptionConfig.AnalyticsEvents.shareSheetOpened, name: "打开分享面板", params: [
+            "source_page": sourcePage
+        ])
+    }
+
+    func trackPosterGenerateStart(sourcePage: String, posterType: String) {
+        track(SubscriptionConfig.AnalyticsEvents.posterGenerateStart, name: "开始生成海报", params: [
+            "source_page": sourcePage,
+            "poster_type": posterType
+        ])
+    }
+
+    func trackPosterSaveSuccess(sourcePage: String, renderTimeMs: Int, posterType: String) {
+        track(SubscriptionConfig.AnalyticsEvents.posterSaveSuccess, name: "海报保存成功", params: [
+            "source_page": sourcePage,
+            "render_time_ms": renderTimeMs,
+            "poster_type": posterType
+        ])
+    }
+
+    func trackPosterSaveFail(sourcePage: String, errorReason: String, posterType: String) {
+        track(SubscriptionConfig.AnalyticsEvents.posterSaveFail, name: "海报保存失败", params: [
+            "source_page": sourcePage,
+            "error_reason": errorReason,
+            "poster_type": posterType
+        ])
+    }
+
+    func trackPDFExportStart(sourcePage: String) {
+        track(SubscriptionConfig.AnalyticsEvents.pdfExportStart, name: "开始导出报告", params: [
+            "source_page": sourcePage
+        ])
+    }
+
+    func trackPDFGenerateSuccess(sourcePage: String, pageCount: Int, renderTimeMs: Int) {
+        track(SubscriptionConfig.AnalyticsEvents.pdfGenerateSuccess, name: "报告导出成功", params: [
+            "source_page": sourcePage,
+            "page_count": pageCount,
+            "render_time_ms": renderTimeMs
+        ])
+    }
+
+    func trackPDFGenerateFail(sourcePage: String, errorReason: String) {
+        track(SubscriptionConfig.AnalyticsEvents.pdfGenerateFail, name: "报告导出失败", params: [
+            "source_page": sourcePage,
+            "error_reason": errorReason
+        ])
+    }
+
+    func trackShareSheetDismissed(sourcePage: String, actionTaken: String) {
+        track(SubscriptionConfig.AnalyticsEvents.shareSheetDismissed, name: "关闭分享面板", params: [
+            "source_page": sourcePage,
+            "action_taken": actionTaken
+        ])
+    }
     
     // MARK: - 用户属性更新
     

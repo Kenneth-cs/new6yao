@@ -52,6 +52,8 @@ struct DivinationResultPageView: View {
     @State private var saveAlertTitle = "保存成功"
     @State private var saveAlertMessage = "分析结果已保存到历史记录中"
     @State private var showDeductionPrep = false
+    @State private var showShareExport = false
+    @State private var shareActionTaken: ShareActionTaken = .none
     @State private var divinationTime: Date
     @ObservedObject private var aiStore = AIRequestStateStore.shared
     @StateObject private var aiService = AIService.shared
@@ -199,6 +201,45 @@ struct DivinationResultPageView: View {
         )
     }
 
+    private var sharePayload: SharePayload {
+        let sections: [DivinationShareContent.Section]
+        if interpretationMode == .master {
+            let parsed = MasterReportParser.parse(aiInterpretation)
+            sections = MasterReportParser.displayOrder.compactMap { title in
+                guard let body = parsed.sections[title] else { return nil }
+                return DivinationShareContent.Section(title: title, body: body)
+            }
+        } else {
+            sections = []
+        }
+        return .divination(DivinationShareContent(
+            question: question,
+            hexagramName: hexagramData.name,
+            hexagramDescription: hexagramData.description,
+            hexagramShortSummary: hexagramShortSummary,
+            yaoLines: displayYao,
+            liuYaoChart: liuYaoChart,
+            time: divinationTime,
+            location: currentLocation,
+            interpretationMode: interpretationMode,
+            resolvedConclusion: resolvedConclusion,
+            coreConclusionSection: coreConclusionSection,
+            coreVerdictSection: coreVerdictSection,
+            hexagramAnalysis: hexagramAnalysis,
+            questionInterpretation: questionInterpretation,
+            guidanceAdvice: guidanceAdvice,
+            suggestions: displaySuggestions,
+            masterSections: sections,
+            fallbackInterpretation: aiInterpretation
+        ))
+    }
+
+    private func openShareExport() {
+        shareActionTaken = .none
+        showShareExport = true
+        AnalyticsManager.shared.trackShareSheetOpened(sourcePage: ShareSourcePage.divination.rawValue)
+    }
+
     private func openFollowUpChat(mode: FollowUpEntryMode) {
         if persistedFollowUpSession == nil, let record = persistedRecord {
             persistedFollowUpSession = dataService.fetchFollowUpSession(for: record)
@@ -280,6 +321,23 @@ struct DivinationResultPageView: View {
                 onViewOriginal: { showDeductionPrep = false }
             )
         }
+        .sheet(isPresented: $showShareExport, onDismiss: {
+            AnalyticsManager.shared.trackShareSheetDismissed(
+                sourcePage: ShareSourcePage.divination.rawValue,
+                actionTaken: shareActionTaken.rawValue
+            )
+        }) {
+            ShareExportSheet(payload: sharePayload, onPosterSaved: {
+                shareActionTaken = .poster
+                showShareExport = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    ToastManager.shared.showSuccess("海报已保存到相册")
+                }
+            }, onPDFReady: {
+                shareActionTaken = .pdf
+            })
+        }
+        .toastHost(bottomPadding: 96)
         .onAppear {
             if isHistoryRecord {
                 loadHistoryContent()
@@ -525,7 +583,7 @@ struct DivinationResultPageView: View {
     
     private func yaoRow(isYang: Bool, isMoving: Bool, detail: String?) -> some View {
         HStack(spacing: 14) {
-            yaoStroke(isYang: isYang)
+            YaoStrokeView(isYang: isYang, gradient: yaoGradient)
             HStack(spacing: 4) {
                 Text(isYang ? "阳" : "阴")
                     .font(.caption)
@@ -548,30 +606,6 @@ struct DivinationResultPageView: View {
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    /// 阳爻与阴爻共用同一总宽，避免长短不一导致左右错位。
-    private func yaoStroke(isYang: Bool) -> some View {
-        let segment: CGFloat = 52
-        let gap: CGFloat = 14
-        let total = segment * 2 + gap
-        return Group {
-            if isYang {
-                Capsule()
-                    .fill(yaoGradient)
-                    .frame(width: total, height: 7)
-            } else {
-                HStack(spacing: gap) {
-                    Capsule()
-                        .fill(yaoGradient)
-                        .frame(width: segment, height: 7)
-                    Capsule()
-                        .fill(yaoGradient)
-                        .frame(width: segment, height: 7)
-                }
-            }
-        }
-        .frame(width: total, height: 7, alignment: .center)
-    }
-    
     // MARK: - 解读区域
     @ViewBuilder
     private var interpretationSection: some View {
@@ -761,32 +795,10 @@ struct DivinationResultPageView: View {
                 .fill(Color.primary.opacity(0.05))
                 .frame(height: 0.5)
             
-            HStack(spacing: 10) {
-                outlineActionButton(icon: "bookmark", title: "保存", action: saveResult)
-                outlineActionButton(icon: "arrow.triangle.2.circlepath", title: "重解", action: retryInterpretation)
-                
-                Spacer(minLength: 12)
-                
-                Button(action: { showDeductionPrep = true }) {
-                    HStack(spacing: 6) {
-                        Text("推演事件趋势")
-                        Image(systemName: "arrow.right")
-                            .font(.caption.weight(.bold))
-                    }
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 18)
-                    .frame(height: 44)
-                    .background(Capsule().fill(ResultTheme.fill))
-                    .shadow(color: ResultTheme.primary.opacity(0.28), radius: 8, y: 3)
-                }
-                .buttonStyle(.plain)
+            ViewThatFits(in: .horizontal) {
+                bottomActionRow(shareTitle: "分享")
+                bottomActionRow(shareTitle: nil)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
         }
         .background(
             Color(.systemBackground)
@@ -794,18 +806,52 @@ struct DivinationResultPageView: View {
         )
     }
     
-    private func outlineActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+    private func bottomActionRow(shareTitle: String?) -> some View {
+        HStack(spacing: 6) {
+            outlineActionButton(icon: "bookmark", title: "保存", action: saveResult)
+            outlineActionButton(icon: "arrow.triangle.2.circlepath", title: "重解", action: retryInterpretation)
+            outlineActionButton(icon: "square.and.arrow.up", title: shareTitle, action: openShareExport)
+            
+            Spacer(minLength: 8)
+            
+            Button(action: { showDeductionPrep = true }) {
+                HStack(spacing: 6) {
+                    Text("推演事件趋势")
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.bold))
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(Capsule().fill(ResultTheme.fill))
+                .shadow(color: ResultTheme.primary.opacity(0.28), radius: 8, y: 3)
+            }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
+
+    private func outlineActionButton(icon: String, title: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: title == nil ? 0 : 6) {
                 Image(systemName: icon)
-                Text(title)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                if let title {
+                    Text(title)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
             .font(.subheadline)
             .fontWeight(.medium)
             .foregroundColor(ResultTheme.primary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, title == nil ? 12 : 10)
             .frame(height: 44)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -817,6 +863,8 @@ struct DivinationResultPageView: View {
             )
         }
         .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityLabel(title ?? "分享")
     }
     
     private func whiteCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
