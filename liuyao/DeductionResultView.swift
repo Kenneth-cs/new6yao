@@ -16,10 +16,22 @@ struct DeductionResultView: View {
     @State private var basisPathId: String?
     
     private static let disclaimerText = "本推演基于本次卦象与已知背景，仅供参考，不代表确定结果。"
+    /// 比纯黑浅一档，比系统浅灰深，用来读长段正文。
+    private static let readingBody = Color.primary.opacity(0.78)
     
     private var recommendedPath: DeductionReport.DeductionPathResult? {
         guard let id = report.recommendation.resolvedPathId else { return nil }
         return report.path(id: id)
+    }
+    
+    /// 卡片固定为进、守、退，不按推荐把某一路提前。
+    private var orderedPaths: [DeductionReport.DeductionPathResult] {
+        let order = ["advance", "hold", "withdraw"]
+        return report.paths.sorted { lhs, rhs in
+            let left = order.firstIndex(of: lhs.id) ?? order.count
+            let right = order.firstIndex(of: rhs.id) ?? order.count
+            return left < right
+        }
     }
     
     var body: some View {
@@ -37,7 +49,13 @@ struct DeductionResultView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
                         questionCard
-                        recommendationCard
+                        VStack(alignment: .leading, spacing: 8) {
+                            recommendationCard
+                            Text(Self.disclaimerText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         pathsSection
                     }
                     .padding(.horizontal, 16)
@@ -46,11 +64,6 @@ struct DeductionResultView: View {
                 }
                 
                 bottomBar
-            }
-        }
-        .onAppear {
-            if expandedPathIds.isEmpty, let first = report.paths.first {
-                expandedPathIds = [first.id]
             }
         }
         .alert(saveAlertTitle, isPresented: $showSaveAlert) {
@@ -118,12 +131,12 @@ struct DeductionResultView: View {
     // MARK: - Recommendation
     private var recommendationCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !report.recommendation.isInsufficient, let name = recommendedPath?.fixedName, !name.isEmpty {
+            if !report.recommendation.isInsufficient, let path = recommendedPath {
                 HStack(spacing: 6) {
                     Image(systemName: "star.fill")
                         .font(.caption)
                         .foregroundColor(.yellow)
-                    Text("当前较宜 · \(name)")
+                    Text("当前较宜 · \(path.glyph)")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                 }
@@ -140,11 +153,6 @@ struct DeductionResultView: View {
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
-            
-            Text(Self.disclaimerText)
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.7))
-                .padding(.top, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,12 +169,6 @@ struct DeductionResultView: View {
                 .font(.headline)
                 .fontWeight(.semibold)
             
-            VStack(spacing: 10) {
-                ForEach(report.paths) { path in
-                    pathCard(path)
-                }
-            }
-            
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "hand.tap")
                     .font(.caption)
@@ -175,7 +177,12 @@ struct DeductionResultView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            .padding(.top, 2)
+            
+            VStack(spacing: 10) {
+                ForEach(orderedPaths) { path in
+                    pathCard(path)
+                }
+            }
         }
     }
     
@@ -227,9 +234,10 @@ struct DeductionResultView: View {
                             .font(.headline)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
-                        Text(path.pathVerdict.content)
+                        Text(displayText(path.pathVerdict.content))
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+                            .foregroundColor(ResultTheme.deep)
                             .multilineTextAlignment(.leading)
                             .lineLimit(isExpanded ? nil : 2)
                     }
@@ -278,9 +286,9 @@ struct DeductionResultView: View {
         VStack(alignment: .leading, spacing: 12) {
             if !path.pathAssumption.content.isEmpty {
                 Text(path.pathAssumption.content)
-                    .font(.caption)
-                    .italic()
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 15))
+                    .foregroundColor(Self.readingBody)
+                    .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
             }
             
@@ -288,18 +296,23 @@ struct DeductionResultView: View {
             labeledBlock(icon: "text.alignleft", title: "判断依据", text: path.pathDivinationReasoning.pathSymbolism)
             
             if !path.verificationSignals.cautionText.isEmpty {
-                HStack(alignment: .top, spacing: 4) {
+                (
                     Text("留意点：")
                         .fontWeight(.semibold)
+                        .foregroundColor(Color(red: 0.62, green: 0.32, blue: 0.08))
                     + Text(path.verificationSignals.cautionText)
-                }
-                .font(.subheadline)
-                .foregroundColor(.primary)
+                        .foregroundColor(Self.readingBody)
+                )
+                .font(.system(size: 15))
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.orange.opacity(0.10))
+                        .fill(Color(red: 1, green: 0.95, blue: 0.88))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color(red: 0.86, green: 0.48, blue: 0.16), lineWidth: 1)
                 )
             }
         }
@@ -312,12 +325,13 @@ struct DeductionResultView: View {
                     .font(.caption)
                     .foregroundColor(ResultTheme.primary)
                 Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
             }
             Text(displayText(text))
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+                .font(.system(size: 15))
+                .foregroundColor(Self.readingBody)
+                .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

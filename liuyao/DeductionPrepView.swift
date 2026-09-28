@@ -15,6 +15,7 @@ struct DeductionPrepView: View {
     @State private var showDeductionResult = false
     @State private var deductionReport: DeductionReport?
     @State private var isLoading = false
+    @State private var loadingStage = 0
     @State private var errorMessage: String?
     @FocusState private var isBackgroundFocused: Bool
     
@@ -53,15 +54,9 @@ struct DeductionPrepView: View {
             }
             
             if isLoading {
-                Color.black.opacity(0.35).ignoresSafeArea()
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.5)
-                    Text("正在推演中…")
-                        .font(.subheadline)
-                        .foregroundColor(.white)
-                }
+                Color.black.opacity(0.12).ignoresSafeArea()
+                loadingDialog
+                    .padding(.horizontal, 48)
             }
             
             if let errorMessage, !isLoading {
@@ -80,6 +75,25 @@ struct DeductionPrepView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: errorMessage)
+        .animation(.easeInOut(duration: 0.25), value: isLoading)
+        .onChange(of: isLoading) { loading in
+            guard loading else { return }
+            loadingStage = 0
+            Task {
+                let pauses: [UInt64] = [2_200_000_000, 2_600_000_000]
+                for (index, pause) in pauses.enumerated() {
+                    try? await Task.sleep(nanoseconds: pause)
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        if isLoading {
+                            withAnimation(.easeInOut(duration: 0.45)) {
+                                loadingStage = index + 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showDeductionResult) {
             if let report = deductionReport {
                 DeductionResultView(
@@ -104,6 +118,67 @@ struct DeductionPrepView: View {
             }
         }
     }
+    
+    // MARK: - Loading dialog
+    /// 弹窗图标显示区域 88×88 pt。请提供一张正方形 PNG，建议 264×264 px（@3x）。
+    private let loadingIconSide: CGFloat = 88
+    
+    private var loadingDialog: some View {
+        let stage = Self.loadingStages[min(loadingStage, Self.loadingStages.count - 1)]
+        return VStack(spacing: 14) {
+            loadingIcon
+                .frame(width: loadingIconSide, height: loadingIconSide)
+            
+            VStack(spacing: 6) {
+                Text(stage.title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                Text(stage.subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .id(loadingStage)
+            .transition(.opacity)
+            
+            loadingProgress(stage.progress)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 26)
+        .padding(.bottom, 22)
+        .frame(maxWidth: 300)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: ResultTheme.primary.opacity(0.12), radius: 18, y: 8)
+        )
+    }
+    
+    private var loadingIcon: some View {
+        SpinningDeductionIcon()
+    }
+    
+    private func loadingProgress(_ progress: CGFloat) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(ResultTheme.softStrong)
+                Capsule()
+                    .fill(ResultTheme.fill)
+                    .frame(width: max(18, geo.size.width * progress))
+            }
+        }
+        .frame(height: 4)
+        .padding(.top, 4)
+        .animation(.easeInOut(duration: 0.45), value: progress)
+    }
+    
+    private static let loadingStages: [(title: String, subtitle: String, progress: CGFloat)] = [
+        ("正在分析中...", "正在梳理卦象信息，请稍候", 0.28),
+        ("正在生成推演方案...", "结合多种可能性进行推演", 0.62),
+        ("即将完成...", "正在整理分析结果", 0.9)
+    ]
     
     // MARK: - Header
     private var headerBar: some View {
@@ -385,6 +460,19 @@ struct DeductionPrepView: View {
             summary += "核心断语：\(coreVerdict)"
         }
         return summary
+    }
+}
+
+private struct SpinningDeductionIcon: View {
+    @State private var spinning = false
+
+    var body: some View {
+        Image("DeductionLoading")
+            .resizable()
+            .scaledToFit()
+            .rotationEffect(.degrees(spinning ? 360 : 0))
+            .animation(.linear(duration: 2.6).repeatForever(autoreverses: false), value: spinning)
+            .onAppear { spinning = true }
     }
 }
 

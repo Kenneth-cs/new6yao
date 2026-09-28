@@ -381,17 +381,10 @@ struct DivinationResultPageView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack(alignment: .trailing) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(ResultTheme.softStrong)
-                
-                ResultQuestionMountains()
-                    .frame(width: 118, height: 72)
-                    .padding(.trailing, 6)
-                    .allowsHitTesting(false)
-            }
-        )
+        .background {
+            ResultQuestionBannerBackground()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
     // MARK: - 分析信息卡片
@@ -1434,37 +1427,19 @@ struct TextSegment {
     let isImportant: Bool
 }
 
-// MARK: - 问题卡山脉装饰
-private struct ResultQuestionMountains: View {
+// MARK: - 问题卡整张背景
+private struct ResultQuestionBannerBackground: View {
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: h))
-                path.addLine(to: CGPoint(x: 0, y: h * 0.62))
-                path.addLine(to: CGPoint(x: w * 0.32, y: h * 0.28))
-                path.addLine(to: CGPoint(x: w * 0.55, y: h * 0.52))
-                path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.18))
-                path.addLine(to: CGPoint(x: w, y: h * 0.48))
-                path.addLine(to: CGPoint(x: w, y: h))
-                path.closeSubpath()
-            }
-            .fill(Color.white.opacity(0.42))
-            
-            Path { path in
-                path.move(to: CGPoint(x: w * 0.12, y: h))
-                path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.46))
-                path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.68))
-                path.addLine(to: CGPoint(x: w * 0.88, y: h * 0.36))
-                path.addLine(to: CGPoint(x: w, y: h * 0.58))
-                path.addLine(to: CGPoint(x: w, y: h))
-                path.closeSubpath()
-            }
-            .fill(Color.white.opacity(0.28))
+            let imageRatio: CGFloat = 1224.0 / 336.0
+            let fillWidth = max(geo.size.width, geo.size.height * imageRatio)
+            let fillHeight = fillWidth / imageRatio
+            Image("ResultQuestionBanner")
+                .resizable()
+                .frame(width: fillWidth, height: fillHeight)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .trailing)
         }
-        .opacity(0.9)
+        .clipped()
     }
 }
 
