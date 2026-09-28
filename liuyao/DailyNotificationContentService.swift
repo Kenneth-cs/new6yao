@@ -77,15 +77,20 @@ final class DailyNotificationContentService {
         guard !aiCalledToday else { return }
         ud.set(todayKey(), forKey: keyLastAIDate)   // 先标记，防止并发多次触发
 
-        Task {
+        Task { [weak self] in
+            guard let self = self else { return }
             guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
-                  let ai = await generateAIContent(for: tomorrow) else { return }
+                  let ai = await self.generateAIContent(for: tomorrow) else { return }
+            
+            let cachedTitleKey = self.keyCachedTitle
+            let cachedBodyKey = self.keyCachedBody
+            
             await MainActor.run {
                 // 用 AI 文案替换明天那条通知
                 NotificationManager.shared.scheduleOnceFor(date: tomorrow, title: ai.title, body: ai.body)
                 // 同步更新预览缓存
-                ud.set(ai.title, forKey: keyCachedTitle)
-                ud.set(ai.body,  forKey: keyCachedBody)
+                UserDefaults.standard.set(ai.title, forKey: cachedTitleKey)
+                UserDefaults.standard.set(ai.body,  forKey: cachedBodyKey)
                 print("🤖 AI 文案已更新明天通知: \(ai.title)")
             }
         }

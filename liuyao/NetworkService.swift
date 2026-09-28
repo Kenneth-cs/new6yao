@@ -2,6 +2,10 @@ import Foundation
 import Network
 import UIKit
 
+private final class BackgroundTaskBox: @unchecked Sendable {
+    var id: UIBackgroundTaskIdentifier = .invalid
+}
+
 class NetworkService {
     static let shared = NetworkService()
     private let networkMonitor = NWPathMonitor()
@@ -43,22 +47,23 @@ class NetworkService {
     func sendRequest<T: Codable>(
         body: [String: Any],
         responseType: T.Type,
-        maxRetries: Int = NetworkConfig.maxRetries
+        maxRetries: Int = NetworkConfig.maxRetries,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
         // --- 方案一：开启后台任务以防切出App导致请求中断 ---
         let bgTaskName = "AIRequest-\(UUID().uuidString)"
         var bgTask: UIBackgroundTaskIdentifier = .invalid
         bgTask = await MainActor.run {
-            var taskId: UIBackgroundTaskIdentifier = .invalid
-            taskId = UIApplication.shared.beginBackgroundTask(withName: bgTaskName) {
+            let box = BackgroundTaskBox()
+            box.id = UIApplication.shared.beginBackgroundTask(withName: bgTaskName) {
                 // 超时闭包，系统强杀前调用
-                if taskId != .invalid {
-                    UIApplication.shared.endBackgroundTask(taskId)
+                if box.id != .invalid {
+                    UIApplication.shared.endBackgroundTask(box.id)
                     print("[NetworkService] 后台任务 \(bgTaskName) 即将超时，清理完毕")
                 }
             }
             print("[NetworkService] 开启后台任务: \(bgTaskName)")
-            return taskId
+            return box.id
         }
         
         defer {
@@ -96,7 +101,7 @@ class NetworkService {
             }
             
             do {
-                let result = try await performSingleRequest(url: url, body: body, responseType: responseType)
+                let result = try await performSingleRequest(url: url, body: body, responseType: responseType, timeout: timeout)
                 print("[NetworkService] 请求成功！")
                 return result
             } catch {
@@ -143,7 +148,8 @@ class NetworkService {
     private func performSingleRequest<T: Codable>(
         url: URL,
         body: [String: Any],
-        responseType: T.Type
+        responseType: T.Type,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
         // 使用不走代理的 URLSession，避免本地代理（如 Clash/V2Ray）拦截导致 TLS 错误
         let sessionConfig = URLSessionConfiguration.ephemeral
@@ -154,7 +160,8 @@ class NetworkService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = NetworkConfig.readTimeout
+        let readTimeout = timeout ?? NetworkConfig.readTimeout
+        request.timeoutInterval = readTimeout
         request.cachePolicy = .reloadIgnoringLocalCacheData
         
         // JSON编码
@@ -168,7 +175,7 @@ class NetworkService {
         print("[NetworkService] 发送请求到: \(url)")
         print("[NetworkService] 请求头: \(request.allHTTPHeaderFields ?? [:])")
         print("[NetworkService] 请求体大小: \(request.httpBody?.count ?? 0) 字节")
-        print("[NetworkService] 连接超时: \(NetworkConfig.connectTimeout)秒, 读取超时: \(NetworkConfig.readTimeout)秒")
+        print("[NetworkService] 连接超时: \(NetworkConfig.connectTimeout)秒, 读取超时: \(readTimeout)秒")
         
         // 打印请求体内容用于调试
         if let httpBody = request.httpBody,

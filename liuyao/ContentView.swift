@@ -875,7 +875,8 @@ struct CoinTossView: View {
                             onDismiss: {
                                 // 在ContentView的CoinTossView中，通过onDismissToHome回调返回首页
                                 onDismissToHome()
-                            }
+                            },
+                            castTime: Date()
                         )) {
                             HStack {
                                 Image(systemName: "eye.fill")

@@ -1,503 +1,306 @@
 import SwiftUI
 import Network
 
+/// 结果页主色，对齐设计稿紫 #935CEE
+enum ResultTheme {
+    static let primary = Color(red: 147 / 255, green: 92 / 255, blue: 238 / 255) // #935CEE
+    static let deep = Color(red: 124 / 255, green: 74 / 255, blue: 220 / 255)    // #7C4ADC
+    static let accent = Color(red: 158 / 255, green: 110 / 255, blue: 242 / 255) // #9E6EF2
+    static let soft = Color(red: 0.95, green: 0.93, blue: 0.99)
+    static let softStrong = Color(red: 0.93, green: 0.90, blue: 0.99)
+    
+    static var yao: LinearGradient {
+        LinearGradient(colors: [accent, primary, deep], startPoint: .leading, endPoint: .trailing)
+    }
+    
+    static var fill: LinearGradient {
+        LinearGradient(colors: [primary, deep], startPoint: .leading, endPoint: .trailing)
+    }
+}
+
 struct DivinationResultPageView: View {
     let question: String
     let tossResults: [Bool]
+    let yaoLines: [YaoXiang]
     let hexagramData: (name: String, description: String)
     let currentLocation: String
     let onDismiss: () -> Void
-    @State private var aiInterpretation: String = ""
+    let isHistoryRecord: Bool
+    let interpretationMode: InterpretationMode
+    let liuYaoChart: LiuYaoReading?
+    let categorySource: CategorySource
+    let chartBuildMs: Int
+    private let savedInterpretation: String
+    private let savedAdvice: String
+    private let castTime: Date
+    
+    @State private var aiInterpretation: String
     @State private var hexagramAnalysis: String = ""
     @State private var questionInterpretation: String = ""
-    @State private var guidanceAdvice: String = ""
-    @State private var isLoading = true
+    @State private var coreConclusionSection: String = ""
+    @State private var coreVerdictSection: String = ""
+    @State private var guidanceAdvice: String
+    @State private var isLoading: Bool
     @State private var showSaveAlert = false
-    @State private var divinationTime: Date = Date() // 静态分析时间
+    @State private var showFollowUpChat = false
+    @State private var followUpEntryMode: FollowUpEntryMode = .fromIcon
+    @State private var aiFollowUpSuggestions: [String]
+    @State private var oneSentenceConclusion: String
+    @State private var persistedRecord: DivinationRecord?
+    @State private var persistedFollowUpSession: FollowUpSession?
+    @State private var pendingNewArchive = false
+    @State private var saveAlertTitle = "保存成功"
+    @State private var saveAlertMessage = "分析结果已保存到历史记录中"
+    @State private var showDeductionPrep = false
+    @State private var divinationTime: Date
     @ObservedObject private var aiStore = AIRequestStateStore.shared
     @StateObject private var aiService = AIService.shared
+    
+    init(
+        question: String,
+        tossResults: [Bool],
+        yaoLines: [YaoXiang]? = nil,
+        hexagramData: (name: String, description: String),
+        currentLocation: String,
+        onDismiss: @escaping () -> Void,
+        isHistoryRecord: Bool = false,
+        savedInterpretation: String = "",
+        savedAdvice: String = "",
+        castTime: Date,
+        interpretationMode: InterpretationMode = .professional,
+        liuYaoChart: LiuYaoReading? = nil,
+        categorySource: CategorySource = .unclassified,
+        chartBuildMs: Int = 0,
+        sourceRecord: DivinationRecord? = nil
+    ) {
+        self.question = question
+        self.tossResults = tossResults
+        self.yaoLines = yaoLines ?? tossResults.map { $0 ? .youngYang : .youngYin }
+        self.hexagramData = hexagramData
+        self.currentLocation = currentLocation
+        self.onDismiss = onDismiss
+        self.isHistoryRecord = isHistoryRecord
+        self.interpretationMode = interpretationMode
+        self.liuYaoChart = liuYaoChart
+        self.categorySource = categorySource
+        self.chartBuildMs = chartBuildMs
+        self.savedInterpretation = savedInterpretation
+        self.savedAdvice = savedAdvice
+        self.castTime = castTime
+        _aiInterpretation = State(initialValue: savedInterpretation)
+        _guidanceAdvice = State(initialValue: "")
+        _aiFollowUpSuggestions = State(initialValue: sourceRecord?.followUpSuggestions ?? [])
+        _oneSentenceConclusion = State(initialValue: sourceRecord?.oneSentenceConclusion ?? "")
+        _persistedRecord = State(initialValue: sourceRecord)
+        _persistedFollowUpSession = State(initialValue: nil)
+        _isLoading = State(initialValue: !isHistoryRecord)
+        _divinationTime = State(initialValue: castTime)
+    }
+
+    private var displayYao: [YaoXiang] {
+        yaoLines.count == 6 ? yaoLines : tossResults.map { $0 ? .youngYang : .youngYin }
+    }
 
     private var requestKey: String {
-        let hexBinary = tossResults.map { $0 ? "1" : "0" }.joined()
-        return "divination_\(hexBinary)_\(abs(question.hashValue))"
+        let hexBinary = displayYao.map { $0.isYang ? "1" : "0" }.joined()
+        return "divination_\(hexBinary)_\(abs(question.hashValue))_\(interpretationMode.rawValue)"
     }
+    @State private var masterParseOk = false
     @StateObject private var dataService = DataService()
     @State private var networkMonitor = NWPathMonitor()
     @State private var isNetworkAvailable = true
     @Environment(\.dismiss) private var dismiss
     
+    private let yaoGradient = ResultTheme.yao
+    
+    private var hexagramShortSummary: String {
+        let desc = hexagramData.description
+        if let range = desc.range(of: "。象征") {
+            return String(desc[..<range.lowerBound])
+        }
+        if let period = desc.firstIndex(of: "。") {
+            return String(desc[..<period])
+        }
+        return desc
+    }
+    
+    private var hasFinishedInterpretation: Bool {
+        if isLoading { return false }
+        if aiInterpretation.contains("解读失败") || aiInterpretation.contains("超时") || aiInterpretation.contains("网络") {
+            return false
+        }
+        return isHistoryRecord || !aiInterpretation.isEmpty || !hexagramAnalysis.isEmpty
+    }
+    
+    private var mockOneSentenceConclusion: String {
+        let desc = hexagramData.description
+        if desc.contains("宜守静待时") || desc.contains("不可妄动") || hexagramData.name.contains("否") {
+            return "当前不宜主动推进，宜静待时机"
+        }
+        if let range = desc.range(of: "象征") {
+            let rest = String(desc[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let period = rest.firstIndex(of: "。") {
+                return String(rest[..<period])
+            }
+            return rest
+        }
+        return hexagramShortSummary
+    }
+    
+    private var displaySuggestions: [String] {
+        InterpretationTrailer.padded(aiFollowUpSuggestions)
+    }
+
+    private var resolvedConclusion: String {
+        let trimmed = oneSentenceConclusion.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return InterpretationTrailer.readableOverview(trimmed) }
+        if interpretationMode == .master {
+            let parsed = MasterReportParser.parse(aiInterpretation)
+            if let last = parsed.sections["最后一句"], !last.isEmpty {
+                return InterpretationTrailer.readableOverview(last)
+            }
+            if let core = parsed.sections["核心结论"], !core.isEmpty {
+                return InterpretationTrailer.readableOverview(String(core.prefix(80)))
+            }
+        }
+        if !mockOneSentenceConclusion.isEmpty {
+            return InterpretationTrailer.readableOverview(mockOneSentenceConclusion)
+        }
+        let source = (guidanceAdvice.isEmpty ? aiInterpretation : guidanceAdvice)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if source.isEmpty { return "暂无解读" }
+        return InterpretationTrailer.readableOverview(String(source.prefix(80)))
+    }
+
+    private func buildInterpretationSummary() -> String {
+        let parts = [resolvedConclusion, guidanceAdvice]
+        let joined = parts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "暂无解读" }
+            .joined(separator: "\n")
+        return String(joined.prefix(300))
+    }
+
+    private var followUpContext: HexagramContext {
+        HexagramContext(
+            question: question,
+            hexagramName: hexagramData.name,
+            hexagramDescription: hexagramData.description,
+            oneSentenceConclusion: resolvedConclusion,
+            castTime: castTime,
+            location: currentLocation,
+            interpretationSummary: buildInterpretationSummary(),
+            liuYaoChart: liuYaoChart,
+            yaoLines: displayYao,
+            followUpSuggestions: displaySuggestions
+        )
+    }
+
+    private func openFollowUpChat(mode: FollowUpEntryMode) {
+        if persistedFollowUpSession == nil, let record = persistedRecord {
+            persistedFollowUpSession = dataService.fetchFollowUpSession(for: record)
+        }
+        followUpEntryMode = mode
+        showFollowUpChat = true
+    }
+    
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
+        ZStack {
+            pageBackground
+                .ignoresSafeArea()
+            
             VStack(spacing: 0) {
-                // 顶部信息区域
-                VStack(spacing: 16) {
-                    // 标题和完成按钮
-                    HStack {
-                        Text("分析结果")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [.purple, .indigo]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Spacer()
-                        
-                         Button(action: {
-                             print("[DivinationResultPageView] 点击完成按钮")
-                             aiStore.clearSlot(key: requestKey)
-                             onDismiss()
-                         }) {
-                            Text("完成")
-                                .font(.headline)
-                                .foregroundColor(.purple)
-                                .fontWeight(.medium)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    
-                    // 问题显示
-                    VStack(spacing: 8) {
-                        Text("您的问题")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Text(question)
-                            .font(.title2)
-                            .fontWeight(.medium)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                    }
-                    
-                    // 分析信息区域 - 简洁白色背景布局
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Image(systemName: "info.circle.fill")
-                                .foregroundColor(.blue)
-                                .font(.title3)
-                            Text("分析信息")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(.horizontal, 20)
-                        
-                        VStack(alignment: .leading, spacing: 16) {
-                            // 卦名
-                            HStack {
-                                Text("卦名")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 60, alignment: .leading)
-                                
-                                Text(hexagramData.name)
-                                    .font(.title)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.primary)
-                                
-                                Spacer()
-                            }
-                            
-                            // 卦象描述
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("卦象")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                
-                                Text(hexagramData.description)
-                                    .font(.body)
-                                    .foregroundColor(.primary)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            
-                            // 分析时间
-                            HStack {
-                                Image(systemName: "clock.fill")
-                                    .foregroundColor(.blue)
-                                    .font(.caption)
-                                Text("分析时间")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                
-                                Text(formatDate(divinationTime))
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                
-                                Spacer()
-                            }
-                            
-                            // 分析地点
-                            HStack {
-                                Image(systemName: "location.fill")
-                                    .foregroundColor(.blue)
-                                    .font(.caption)
-                                Text("分析地点")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                
-                                Text(currentLocation.isEmpty ? "未知地点" : currentLocation)
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                
-                                Spacer()
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                    
-                    // 卦象显示 - 卡片样式居中显示
-                    VStack(spacing: 16) {
-                        Text("卦象")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.purple)
-                        
-                        // 爻象显示卡片
-                        VStack(spacing: 10) {
-                            ForEach(Array(tossResults.enumerated().reversed()), id: \.offset) { index, result in
-                                HStack {
-                                    if result {
-                                        Rectangle()
-                                            .fill(
-                                                LinearGradient(
-                                                    gradient: Gradient(colors: [.purple, .indigo]),
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                            .frame(width: 100, height: 8)
-                                    } else {
-                                        HStack(spacing: 8) {
-                                            Rectangle()
-                                                .fill(
-                                                    LinearGradient(
-                                                        gradient: Gradient(colors: [.purple, .indigo]),
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .frame(width: 46, height: 8)
-                                            Rectangle()
-                                                .fill(
-                                                    LinearGradient(
-                                                        gradient: Gradient(colors: [.purple, .indigo]),
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .frame(width: 46, height: 8)
-                                        }
-                                    }
-                                    
-                                    Text(result ? "阳" : "阴")
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 30)
-                                }
-                            }
-                        }
-                        .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(.secondarySystemBackground))
-                                .shadow(color: Color.primary.opacity(0.08), radius: 8, x: 0, y: 2)
-                        )
-                        .frame(maxWidth: 260)
-                    }
-                    .padding(.horizontal, 20)
-                }
-                .background(Color(.systemBackground))
-                .padding(.bottom, 20)
+                headerBar
                 
-                // AI解读内容区域
-                if isLoading {
-                    VStack(spacing: 16) {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(1.0)
-                                .tint(.purple)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("大师正在解读卦象...")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                
-                                Text("请稍候，正在为您分析卦象含义")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                            Spacer()
-                        }
-                        
-                        // 改进的提示信息
-                        VStack(spacing: 8) {
-                            Text("💡 解读过程可能需要30-60秒")
-                                .font(.subheadline)
-                                .foregroundColor(.orange)
-                            
-                            Text("网络不佳时会自动重试，请耐心等待")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Button("取消解读") {
-                            // 取消解读逻辑
-                            isLoading = false
-                            aiInterpretation = "解读已取消"
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(.orange)
-                    }
-                    .padding(20)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(.secondarySystemBackground))
-                            .shadow(color: Color.primary.opacity(0.15), radius: 10, x: 0, y: 4)
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
-                    .background(Color(.systemBackground))
-                } else {
-                    VStack(spacing: 20) {
-                        // 检查是否有错误状态
-                        if aiInterpretation.contains("解读失败") || aiInterpretation.contains("超时") || aiInterpretation.contains("网络") {
-                            // 错误状态显示
-                            VStack(spacing: 12) {
-                                Image(systemName: "wifi.exclamationmark")
-                                    .font(.title2)
-                                    .foregroundColor(.orange)
-                                
-                                Text("网络请求超时")
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                
-                                Text("请检查网络连接，或稍后重试")
-                                    .font(.body)
-                                    .foregroundColor(.secondary)
-                                    .multilineTextAlignment(.center)
-                                
-                                Button("重新解读") {
-                                    aiStore.clearSlot(key: requestKey)
-                                    isLoading = true
-                                    aiInterpretation = ""
-                                    hexagramAnalysis = ""
-                                    questionInterpretation = ""
-                                    guidanceAdvice = ""
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        requestAIInterpretation()
-                                    }
-                                }
-                                .font(.body)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                                .background(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [.purple, .indigo]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 14) {
+                            questionCard
+                            analysisInfoCard
+                            hexagramCard
+                            interpretationSection
+                            if hasFinishedInterpretation {
+                                FollowUpCoachCard(
+                                    questions: displaySuggestions,
+                                    onSelectQuestion: { openFollowUpChat(mode: .fromQuestion(preset: $0)) },
+                                    onContinue: { openFollowUpChat(mode: .fromIcon) }
                                 )
-                                .cornerRadius(20)
                             }
-                            .padding(.vertical, 20)
-                            .padding(.horizontal, 20)
-                        } else {
-                            // 卦象解析板块
-                            VStack(alignment: .leading, spacing: 16) {
-                                HStack {
-                                    Image(systemName: "chart.line.uptrend.xyaxis")
-                                        .foregroundColor(.blue)
-                                        .font(.title2)
-                                    Text("卦象解析")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                }
-                                
-                                if !hexagramAnalysis.isEmpty {
-                                    FormattedDivinationText(content: hexagramAnalysis)
-                                } else {
-                                    Text("正在解析卦象含义...")
-                                        .font(.body)
-                                        .foregroundColor(.secondary)
-                                        .italic()
-                                }
-                            }
-                            .padding(20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [.blue.opacity(0.08), .cyan.opacity(0.05)]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                            )
-                            .padding(.horizontal, 20)
-                            
-                            // 问题解读板块
-                            VStack(alignment: .leading, spacing: 16) {
-                                HStack {
-                                    Image(systemName: "questionmark.circle.fill")
-                                        .foregroundColor(.green)
-                                        .font(.title2)
-                                    Text("问题解读")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.green)
-                                    Spacer()
-                                }
-                                
-                                if !questionInterpretation.isEmpty {
-                                    FormattedDivinationText(content: questionInterpretation)
-                                } else {
-                                    Text("正在解读问题...")
-                                        .font(.body)
-                                        .foregroundColor(.secondary)
-                                        .italic()
-                                }
-                            }
-                            .padding(20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [.green.opacity(0.08), .mint.opacity(0.05)]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                            )
-                            .padding(.horizontal, 20)
-                            
-                            // 建议指导板块
-                            VStack(alignment: .leading, spacing: 16) {
-                                HStack {
-                                    Image(systemName: "lightbulb.fill")
-                                        .foregroundColor(.orange)
-                                        .font(.title2)
-                                    Text("建议指导")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.orange)
-                                    Spacer()
-                                }
-                                
-                                if !guidanceAdvice.isEmpty {
-                                    FormattedDivinationText(content: guidanceAdvice)
-                                } else {
-                                    Text("正在生成建议指导...")
-                                        .font(.body)
-                                        .foregroundColor(.secondary)
-                                        .italic()
-                                }
-                            }
-                            .padding(20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [.orange.opacity(0.08), .yellow.opacity(0.05)]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-                            )
-                            .padding(.horizontal, 20)
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                        .padding(.bottom, hasFinishedInterpretation ? 110 : 28)
                     }
-                    .padding(.bottom, 30)
-                    .background(Color(.systemBackground))
+                    
+                    if hasFinishedInterpretation {
+                        FollowUpEntryView(action: { openFollowUpChat(mode: .fromIcon) })
+                            .padding(.trailing, 10)
+                            .padding(.bottom, 12)
+                    }
                 }
                 
-                // 底部功能按钮
-                if !isLoading {
-                    VStack(spacing: 16) {
-                        HStack(spacing: 16) {
-                            // 保存记录按钮
-                            Button(action: saveResult) {
-                                Text("保存记录")
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.purple)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 25)
-                                            .stroke(Color.purple, lineWidth: 1.5)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 25)
-                                                    .fill(Color(.systemBackground))
-                                            )
-                                    )
-                            }
-                            
-                             // 重新分析按钮
-                             Button(action: {
-                                 print("[DivinationResultPageView] 点击重新分析按钮")
-                                 aiStore.clearSlot(key: requestKey)
-                                 onDismiss()
-                             }) {
-                                Text("重新分析")
-                                    .font(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [.purple, .indigo]),
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .cornerRadius(25)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 30)
-                    }
-                    .background(Color(.systemBackground))
+                if hasFinishedInterpretation {
+                    bottomActionBar
                 }
             }
-            .frame(maxWidth: .infinity)
         }
-        .clipped()                          // 裁剪防止横向拖出空白
-        .navigationTitle("分析结果")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .alert("保存成功", isPresented: $showSaveAlert) {
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(isHistoryRecord ? .hidden : .automatic, for: .tabBar)
+        .alert(saveAlertTitle, isPresented: $showSaveAlert) {
             Button("确定", role: .cancel) { }
         } message: {
-            Text("分析结果已保存到历史记录中")
+            Text(saveAlertMessage)
+        }
+        .fullScreenCover(isPresented: $showFollowUpChat) {
+            FollowUpChatView(
+                entryMode: followUpEntryMode,
+                hexagramContext: followUpContext,
+                existingSession: pendingNewArchive ? nil : persistedFollowUpSession,
+                linkedRecord: pendingNewArchive ? nil : persistedRecord,
+                onDismiss: { session in
+                    if let session { persistedFollowUpSession = session }
+                    showFollowUpChat = false
+                },
+                onViewFullInterpretation: { showFollowUpChat = false }
+            )
+        }
+        .fullScreenCover(isPresented: $showDeductionPrep) {
+            DeductionPrepView(
+                originalQuestion: question,
+                hexagramName: hexagramData.name,
+                liuYaoChart: liuYaoChart,
+                castTime: castTime,
+                aiInterpretation: aiInterpretation,
+                sourceRecord: persistedRecord,
+                onDismiss: { showDeductionPrep = false },
+                onViewOriginal: { showDeductionPrep = false }
+            )
         }
         .onAppear {
-            divinationTime = Date()
+            if isHistoryRecord {
+                loadHistoryContent()
+                startNetworkMonitoring()
+                return
+            }
             AnalyticsManager.shared.incrementDivinationCount()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 startNetworkMonitoring()
                 if let slot = aiStore.slot(for: requestKey) {
                     switch slot.status {
                     case .loading:
-                        // 请求还在后台跑，保持 spinner 等待 Task 完成
                         isLoading = true
                     case .success:
-                        // 后台已拿到结果，直接渲染，不重新请求
-                        aiInterpretation       = slot.result
-                        hexagramAnalysis       = slot.hexagramAnalysis ?? ""
-                        questionInterpretation = slot.questionInterpretation ?? ""
-                        guidanceAdvice         = slot.guidanceAdvice ?? ""
+                        applyRawInterpretation(slot.result)
+                        if hexagramAnalysis.isEmpty {
+                            hexagramAnalysis = slot.hexagramAnalysis ?? ""
+                        }
+                        if questionInterpretation.isEmpty {
+                            questionInterpretation = slot.questionInterpretation ?? ""
+                        }
+                        if guidanceAdvice.isEmpty {
+                            guidanceAdvice = slot.guidanceAdvice ?? ""
+                        }
                         isLoading = false
                     case .failed:
                         aiInterpretation = slot.result
@@ -513,6 +316,591 @@ struct DivinationResultPageView: View {
         }
     }
     
+    // MARK: - 页面背景
+    private var pageBackground: some View {
+        LinearGradient(
+            colors: [
+                ResultTheme.soft,
+                ResultTheme.soft.opacity(0.45),
+                Color(.systemBackground)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+    
+    // MARK: - 顶部栏
+    private var headerBar: some View {
+        HStack(alignment: .center) {
+            Text("分析结果")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(ResultTheme.primary)
+            
+            Spacer()
+            
+            Button(action: {
+                print("[DivinationResultPageView] 点击完成按钮")
+                if !isHistoryRecord {
+                    aiStore.clearSlot(key: requestKey)
+                }
+                onDismiss()
+            }) {
+                Text("完成")
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(ResultTheme.primary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+    }
+    
+    // MARK: - 问题卡片
+    private var questionCard: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.title2)
+                .foregroundStyle(ResultTheme.fill)
+                .frame(width: 36)
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("您的问题")
+                    .font(.subheadline)
+                    .foregroundColor(ResultTheme.primary.opacity(0.75))
+                
+                Text(question)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            ZStack(alignment: .trailing) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(ResultTheme.softStrong)
+                
+                ResultQuestionMountains()
+                    .frame(width: 118, height: 72)
+                    .padding(.trailing, 6)
+                    .allowsHitTesting(false)
+            }
+        )
+    }
+    
+    // MARK: - 分析信息卡片
+    private var analysisInfoCard: some View {
+        whiteCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                        .font(.body)
+                    Text("分析信息")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+                
+                HStack(alignment: .center, spacing: 16) {
+                    Text("卦名")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .frame(width: 36, alignment: .leading)
+                    
+                    Text(hexagramData.name)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                }
+                
+                HStack(alignment: .top, spacing: 16) {
+                    Text("卦象")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .frame(width: 36, alignment: .leading)
+                        .padding(.top, 1)
+                    
+                    Text(hexagramData.description)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("分析时间")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text(formatDate(divinationTime))
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "location.fill")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("分析地点")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text(currentLocation.isEmpty ? "未知地点" : currentLocation)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                }
+            }
+        }
+    }
+    
+    // MARK: - 卦象卡片
+    private var hexagramCard: some View {
+        whiteCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.3.layers.3d")
+                        .font(.body)
+                        .foregroundColor(ResultTheme.primary)
+                    Text("卦象")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                }
+                
+                if let chart = liuYaoChart {
+                    Text(chart.changed == nil ? "无动爻，不变" : "变卦 \(chart.changed?.name ?? "")")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("月建 \(chart.castTime.monthBranch) · 日辰 \(chart.castTime.dayPillar) · 旬空 \(chart.castTime.xunKong.joined())")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(chart.yongShen == nil ? "未指定，由解读综合取用" : "建议用神：\(chart.yongShen?.liuQin ?? "")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(spacing: 10) {
+                    ForEach(Array(displayYao.enumerated().reversed()), id: \.offset) { index, yao in
+                        let line = (liuYaoChart?.primary.lines.indices.contains(index) == true)
+                            ? liuYaoChart?.primary.lines[index]
+                            : nil
+                        yaoRow(isYang: yao.isYang, isMoving: yao.isMoving, detail: line.map { item in
+                            item.shiYing == nil ? item.liuQin : "\(item.liuQin) \(item.shiYing!)"
+                        })
+                    }
+                }
+                .padding(.vertical, 18)
+                .padding(.horizontal, 28)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.secondarySystemBackground).opacity(0.85))
+                )
+                
+                VStack(spacing: 4) {
+                    Text("'\(hexagramData.name)'")
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                    Text(hexagramShortSummary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
+            }
+        }
+    }
+    
+    private func yaoRow(isYang: Bool, isMoving: Bool, detail: String?) -> some View {
+        HStack(spacing: 12) {
+            Group {
+                if isYang {
+                    Capsule()
+                        .fill(yaoGradient)
+                        .frame(width: 118, height: 7)
+                } else {
+                    HStack(spacing: 10) {
+                        Capsule()
+                            .fill(yaoGradient)
+                            .frame(width: 54, height: 7)
+                        Capsule()
+                            .fill(yaoGradient)
+                            .frame(width: 54, height: 7)
+                    }
+                }
+            }
+            
+            HStack(spacing: 4) {
+                Text(isYang ? "阳" : "阴")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                if isMoving {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .frame(width: 36, alignment: .leading)
+
+            if let detail {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    // MARK: - 解读区域
+    @ViewBuilder
+    private var interpretationSection: some View {
+        if isLoading {
+            loadingCard
+        } else if aiInterpretation.contains("解读失败") || aiInterpretation.contains("超时") || aiInterpretation.contains("网络") {
+            errorCard
+        } else if interpretationMode == .master {
+            MasterReportView(rawText: aiInterpretation)
+        } else {
+            VStack(spacing: 14) {
+                if !coreConclusionSection.isEmpty {
+                    interpretationBlock(
+                        icon: "text.badge.checkmark",
+                        iconColor: ResultTheme.primary,
+                        title: "核心结论",
+                        titleColor: ResultTheme.primary,
+                        content: coreConclusionSection,
+                        placeholder: "正在生成核心结论..."
+                    )
+                }
+                if !coreVerdictSection.isEmpty {
+                    interpretationBlock(
+                        icon: "seal.fill",
+                        iconColor: ResultTheme.deep,
+                        title: "核心断语",
+                        titleColor: ResultTheme.deep,
+                        content: coreVerdictSection,
+                        placeholder: "正在生成核心断语..."
+                    )
+                }
+                if !hexagramAnalysis.isEmpty {
+                    interpretationBlock(
+                        icon: "chart.line.uptrend.xyaxis",
+                        iconColor: .blue,
+                        title: "卦象解析",
+                        titleColor: .blue,
+                        content: hexagramAnalysis,
+                        placeholder: "正在解析卦象含义..."
+                    )
+                }
+                if !questionInterpretation.isEmpty {
+                    interpretationBlock(
+                        icon: "questionmark.circle.fill",
+                        iconColor: .green,
+                        title: "问题解读",
+                        titleColor: .green,
+                        content: questionInterpretation,
+                        placeholder: "正在解读问题..."
+                    )
+                }
+                if !guidanceAdvice.isEmpty {
+                    interpretationBlock(
+                        icon: "lightbulb.fill",
+                        iconColor: .orange,
+                        title: "建议指导",
+                        titleColor: .orange,
+                        content: guidanceAdvice,
+                        placeholder: "正在生成建议指导..."
+                    )
+                }
+                if hexagramAnalysis.isEmpty && questionInterpretation.isEmpty && guidanceAdvice.isEmpty && !aiInterpretation.isEmpty {
+                    interpretationBlock(
+                        icon: "chart.line.uptrend.xyaxis",
+                        iconColor: .blue,
+                        title: "卦象解析",
+                        titleColor: .blue,
+                        content: cleanAndFormatText(aiInterpretation),
+                        placeholder: "暂无解读内容"
+                    )
+                }
+            }
+        }
+    }
+    
+    private var loadingCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkle")
+                    .font(.title3)
+                    .foregroundColor(ResultTheme.primary)
+                Text("大师正在解读卦象...")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            
+            Text("请稍候，正在为您分析卦象含义")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 6) {
+                Text("💡")
+                    .font(.subheadline)
+                Text("解读过程可能需要30-60秒")
+                    .font(.subheadline)
+                    .foregroundColor(.orange)
+            }
+            .padding(.top, 4)
+            
+            Text("网络不佳时会自动重试，请耐心等待")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(ResultTheme.soft)
+        )
+    }
+    
+    private var errorCard: some View {
+        whiteCard {
+            VStack(spacing: 12) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                
+                Text("网络请求超时")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                Text("请检查网络连接，或稍后重试")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                Button("重新解读") {
+                    retryInterpretation()
+                }
+                .font(.body)
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .background(ResultTheme.fill)
+                .cornerRadius(20)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+    
+    private func interpretationBlock(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        titleColor: Color,
+        content: String,
+        placeholder: String
+    ) -> some View {
+        whiteCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 6) {
+                    Image(systemName: icon)
+                        .foregroundColor(iconColor)
+                        .font(.title3)
+                    Text(title)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(titleColor)
+                    Spacer()
+                }
+                
+                if !content.isEmpty {
+                    FormattedDivinationText(content: content)
+                } else {
+                    Text(placeholder)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .italic()
+                }
+            }
+        }
+    }
+    
+    // MARK: - 底部操作栏
+    private var bottomActionBar: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.05))
+                .frame(height: 0.5)
+            
+            HStack(spacing: 10) {
+                outlineActionButton(icon: "bookmark", title: "保存", action: saveResult)
+                outlineActionButton(icon: "arrow.triangle.2.circlepath", title: "重解", action: retryInterpretation)
+                
+                Spacer(minLength: 12)
+                
+                Button(action: { showDeductionPrep = true }) {
+                    HStack(spacing: 6) {
+                        Text("推演事件趋势")
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.bold))
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 18)
+                    .frame(height: 44)
+                    .background(Capsule().fill(ResultTheme.fill))
+                    .shadow(color: ResultTheme.primary.opacity(0.28), radius: 8, y: 3)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+        }
+        .background(
+            Color(.systemBackground)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, y: -2)
+        )
+    }
+    
+    private func outlineActionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .font(.subheadline)
+            .fontWeight(.medium)
+            .foregroundColor(ResultTheme.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(ResultTheme.primary.opacity(0.35), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func whiteCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: ResultTheme.primary.opacity(0.10), radius: 12, x: 0, y: 4)
+            )
+    }
+    
+    private func retryInterpretation() {
+        print("[DivinationResultPageView] 点击重新解读")
+        pendingNewArchive = true
+        persistedFollowUpSession = nil
+        aiStore.clearSlot(key: requestKey)
+        isLoading = true
+        aiInterpretation = ""
+        hexagramAnalysis = ""
+        questionInterpretation = ""
+        coreConclusionSection = ""
+        coreVerdictSection = ""
+        guidanceAdvice = ""
+        oneSentenceConclusion = ""
+        aiFollowUpSuggestions = []
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            requestAIInterpretation()
+        }
+    }
+    
+    private func loadHistoryContent() {
+        isLoading = false
+        if savedInterpretation.isEmpty {
+            aiInterpretation = ""
+            hexagramAnalysis = ""
+            questionInterpretation = ""
+            coreConclusionSection = ""
+            coreVerdictSection = ""
+            guidanceAdvice = savedAdvice.isEmpty ? "" : cleanAndFormatText(savedAdvice)
+            if aiFollowUpSuggestions.isEmpty {
+                aiFollowUpSuggestions = InterpretationTrailer.defaultSuggestions
+            }
+            backfillStoredFieldsIfNeeded()
+            return
+        }
+        applyRawInterpretation(savedInterpretation)
+        if guidanceAdvice.isEmpty,
+           !savedAdvice.isEmpty,
+           savedAdvice != savedInterpretation {
+            guidanceAdvice = cleanAndFormatText(savedAdvice)
+        }
+        backfillStoredFieldsIfNeeded()
+    }
+
+    private func applyRawInterpretation(_ raw: String) {
+        let split = InterpretationTrailer.split(raw)
+        aiInterpretation = split.body
+        if !split.conclusion.isEmpty {
+            oneSentenceConclusion = InterpretationTrailer.readableOverview(split.conclusion)
+        }
+        if split.foundSuggestions {
+            aiFollowUpSuggestions = split.suggestions
+        }
+        if interpretationMode == .master {
+            let parsed = MasterReportParser.parse(split.body)
+            masterParseOk = parsed.complete
+            if let advice = parsed.sections["现在最值得做的事"], !advice.isEmpty {
+                guidanceAdvice = advice
+            }
+            if oneSentenceConclusion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let last = parsed.sections["最后一句"], !last.isEmpty {
+                oneSentenceConclusion = InterpretationTrailer.readableOverview(last)
+            }
+        } else {
+            parseAIInterpretation(split.body)
+        }
+        if aiFollowUpSuggestions.isEmpty {
+            aiFollowUpSuggestions = InterpretationTrailer.defaultSuggestions
+        }
+    }
+
+    private func backfillStoredFieldsIfNeeded() {
+        guard isHistoryRecord, let record = persistedRecord else { return }
+        var changed = false
+        if (record.oneSentenceConclusion ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            record.oneSentenceConclusion = resolvedConclusion
+            changed = true
+        }
+        if record.followUpSuggestions.isEmpty {
+            record.followUpSuggestions = displaySuggestions
+            changed = true
+        }
+        if changed {
+            try? record.managedObjectContext?.save()
+        }
+    }
+
     // MARK: - 私有方法
     private func requestAIInterpretation() {
         print("[DivinationResultPageView] 开始请求AI解读")
@@ -543,24 +931,37 @@ struct DivinationResultPageView: View {
                     question: question,
                     hexagram: hexagramStruct,
                     tossResults: tossResults,
-                    divinationTime: divinationTime,
-                    divinationLocation: currentLocation.isEmpty ? "未知地点" : currentLocation
+                    divinationTime: self.castTime,
+                    divinationLocation: currentLocation.isEmpty ? "未知地点" : currentLocation,
+                    mode: interpretationMode,
+                    chart: liuYaoChart
                 )
                 
                 print("[DivinationResultPageView] AI解读完成，长度: \(interpretation.count)")
                 
                 await MainActor.run {
-                    self.aiInterpretation = interpretation
-                    self.parseAIInterpretation(interpretation)
+                    self.applyRawInterpretation(interpretation)
                     self.isLoading = false
-                    let waitMs = Int(Date().timeIntervalSince(self.divinationTime) * 1000)
+                    let waitMs = Int(Date().timeIntervalSince(self.castTime) * 1000)
                     let usageStats = UserDefaults.standard.usageStatistics
+                    let movingCount = self.displayYao.filter(\.isMoving).count
                     AnalyticsManager.shared.trackDivinationResult(
                         hexagramName: self.hexagramData.name,
                         waitTimeMs: waitMs,
                         dailyCurrentCount: usageStats.dailyDivinationCount,
                         userQuestion: self.question,
-                        aiInterpretation: interpretation
+                        aiInterpretation: interpretation,
+                        extras: [
+                            "interpretation_mode": self.interpretationMode.rawValue,
+                            "has_moving_lines": movingCount > 0,
+                            "moving_count": movingCount,
+                            "engine_category": self.liuYaoChart?.question.category ?? "unclassified",
+                            "category_source": self.categorySource.rawValue,
+                            "chart_build_ms": self.chartBuildMs,
+                            "ai_max_tokens": self.interpretationMode == .master ? 8000 : 3000,
+                            "master_section_parse_ok": self.interpretationMode == .master ? self.masterParseOk : false,
+                            "question_length": self.question.count
+                        ]
                     )
                     DispatchQueue.main.async {
                         self.aiStore.markSuccess(
@@ -595,12 +996,42 @@ struct DivinationResultPageView: View {
     }
     
     private func saveResult() {
-        dataService.saveDivinationRecord(
+        if persistedRecord != nil && !pendingNewArchive {
+            saveAlertTitle = "已在历史中"
+            saveAlertMessage = "重新解读并点保存后，会另外生成一条新记录。"
+            showSaveAlert = true
+            return
+        }
+        let wasRetry = pendingNewArchive && persistedRecord != nil
+        let saved = dataService.saveDivinationRecord(
             question: question,
             tossResults: tossResults,
             aiInterpretation: aiInterpretation,
-            advice: aiInterpretation
+            advice: guidanceAdvice.isEmpty ? aiInterpretation : guidanceAdvice,
+            castTime: castTime,
+            mode: interpretationMode,
+            chart: liuYaoChart,
+            yaoLines: displayYao,
+            category: liuYaoChart?.question.category,
+            categorySource: categorySource,
+            locationName: currentLocation,
+            oneSentenceConclusion: resolvedConclusion,
+            followUpSuggestions: displaySuggestions
         )
+        if let saved {
+            if let session = persistedFollowUpSession, session.divinationRecord == nil {
+                dataService.attach(session, to: saved)
+            }
+            persistedRecord = saved
+            pendingNewArchive = false
+            saveAlertTitle = "保存成功"
+            saveAlertMessage = wasRetry
+                ? "已另存为一条新的历史记录，原来的记录仍保留。"
+                : "分析结果已保存到历史记录中"
+        } else {
+            saveAlertTitle = "保存失败"
+            saveAlertMessage = "这次没有写入历史记录，请再试一次。"
+        }
         showSaveAlert = true
     }
     
@@ -611,68 +1042,84 @@ struct DivinationResultPageView: View {
     }
     
     private func parseAIInterpretation(_ interpretation: String) {
-        // 根据关键词分割内容到三个板块
         let lines = interpretation.components(separatedBy: .newlines)
+        var coreConclusionContent = ""
+        var coreVerdictContent = ""
         var hexagramContent = ""
         var questionContent = ""
         var guidanceContent = ""
-        var currentSection = "hexagram" // 默认开始是卦象解析
+        var currentSection = "hexagram"
         
         for line in lines {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let header = trimmedLine
+                .replacingOccurrences(of: "【", with: "")
+                .replacingOccurrences(of: "】", with: "")
             
-            // 检查是否是问题解读的开始
-            if trimmedLine.contains("问题解读") || trimmedLine.contains("问题分析") || trimmedLine.contains("你的问题") || trimmedLine.contains("问题含义") {
+            if header.hasPrefix("核心结论") {
+                currentSection = "coreConclusion"
+                continue
+            }
+            if header.hasPrefix("核心断语") {
+                currentSection = "coreVerdict"
+                continue
+            }
+            if header.contains("问题解读") || header.contains("问题分析") || header.contains("问题含义") {
                 currentSection = "question"
                 continue
             }
-            // 检查是否是建议指导的开始
-            else if trimmedLine.contains("建议指导") || trimmedLine.contains("指导建议") || trimmedLine.contains("建议") || trimmedLine.contains("指导") {
+            if header.contains("建议指导") || header.contains("指导建议") {
                 currentSection = "guidance"
                 continue
             }
-            // 检查是否是卦象解析的开始
-            else if trimmedLine.contains("卦象解析") || trimmedLine.contains("卦象含义") || trimmedLine.contains("核心含义") {
+            if header.contains("卦象解析") || header.contains("框架解析") || header.contains("卦象含义") || header.contains("核心含义") {
                 currentSection = "hexagram"
                 continue
             }
+            if header.hasPrefix("一句话结论") || header.hasPrefix("追问建议") {
+                currentSection = "skip"
+                continue
+            }
             
-            // 根据当前部分添加内容
-            if currentSection == "hexagram" && !trimmedLine.isEmpty {
-                if !hexagramContent.isEmpty {
-                    hexagramContent += "\n"
-                }
-                hexagramContent += trimmedLine
-            } else if currentSection == "question" && !trimmedLine.isEmpty {
-                if !questionContent.isEmpty {
-                    questionContent += "\n"
-                }
-                questionContent += trimmedLine
-            } else if currentSection == "guidance" && !trimmedLine.isEmpty {
-                if !guidanceContent.isEmpty {
-                    guidanceContent += "\n"
-                }
-                guidanceContent += trimmedLine
+            guard !trimmedLine.isEmpty, currentSection != "skip" else { continue }
+            switch currentSection {
+            case "coreConclusion":
+                appendLine(trimmedLine, to: &coreConclusionContent)
+            case "coreVerdict":
+                appendLine(trimmedLine, to: &coreVerdictContent)
+            case "question":
+                appendLine(trimmedLine, to: &questionContent)
+            case "guidance":
+                appendLine(trimmedLine, to: &guidanceContent)
+            default:
+                appendLine(trimmedLine, to: &hexagramContent)
             }
         }
         
-        // 如果没有找到明确的分割，按长度分割成三部分
-        if hexagramContent.isEmpty && questionContent.isEmpty && guidanceContent.isEmpty {
+        if hexagramContent.isEmpty && questionContent.isEmpty && guidanceContent.isEmpty
+            && coreConclusionContent.isEmpty && coreVerdictContent.isEmpty {
             let totalLength = interpretation.count
             let firstThird = totalLength / 3
             let secondThird = firstThird * 2
-            
             hexagramContent = String(interpretation.prefix(firstThird))
             questionContent = String(interpretation.dropFirst(firstThird).prefix(firstThird))
             guidanceContent = String(interpretation.suffix(totalLength - secondThird))
         }
         
-        // 更新状态 - 清理和格式化文本
         DispatchQueue.main.async {
-            self.hexagramAnalysis = hexagramContent.isEmpty ? "暂无卦象解析" : self.cleanAndFormatText(hexagramContent)
-            self.questionInterpretation = questionContent.isEmpty ? "暂无问题解读" : self.cleanAndFormatText(questionContent)
-            self.guidanceAdvice = guidanceContent.isEmpty ? "暂无建议指导" : self.cleanAndFormatText(guidanceContent)
+            self.coreConclusionSection = coreConclusionContent.isEmpty ? "" : self.cleanAndFormatText(coreConclusionContent)
+            self.coreVerdictSection = coreVerdictContent.isEmpty ? "" : self.cleanAndFormatText(coreVerdictContent)
+            self.hexagramAnalysis = hexagramContent.isEmpty ? "" : self.cleanAndFormatText(hexagramContent)
+            self.questionInterpretation = questionContent.isEmpty ? "" : self.cleanAndFormatText(questionContent)
+            self.guidanceAdvice = guidanceContent.isEmpty ? "" : self.cleanAndFormatText(guidanceContent)
         }
+    }
+    
+    private func appendLine(_ line: String, to target: inout String) {
+        if !target.isEmpty {
+            target += "\n"
+        }
+        target += line
     }
     
     // 清理和格式化文本
@@ -987,15 +1434,253 @@ struct TextSegment {
     let isImportant: Bool
 }
 
-#Preview {
-    NavigationStack {
-        let hexagramInfo = HexagramData.getHexagram(for: [true, false, true, false, true, false].map { $0 ? "1" : "0" }.joined())
-        DivinationResultPageView(
-            question: "我的事业发展如何？",
-            tossResults: [true, false, true, false, true, false],
-            hexagramData: (name: hexagramInfo.name, description: hexagramInfo.description),
-            currentLocation: "北京市",
-            onDismiss: {}
+// MARK: - 问题卡山脉装饰
+private struct ResultQuestionMountains: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: h))
+                path.addLine(to: CGPoint(x: 0, y: h * 0.62))
+                path.addLine(to: CGPoint(x: w * 0.32, y: h * 0.28))
+                path.addLine(to: CGPoint(x: w * 0.55, y: h * 0.52))
+                path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.18))
+                path.addLine(to: CGPoint(x: w, y: h * 0.48))
+                path.addLine(to: CGPoint(x: w, y: h))
+                path.closeSubpath()
+            }
+            .fill(Color.white.opacity(0.42))
+            
+            Path { path in
+                path.move(to: CGPoint(x: w * 0.12, y: h))
+                path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.46))
+                path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.68))
+                path.addLine(to: CGPoint(x: w * 0.88, y: h * 0.36))
+                path.addLine(to: CGPoint(x: w, y: h * 0.58))
+                path.addLine(to: CGPoint(x: w, y: h))
+                path.closeSubpath()
+            }
+            .fill(Color.white.opacity(0.28))
+        }
+        .opacity(0.9)
+    }
+}
+
+// MARK: - 追问入口（悬浮在内容区右下角，暂不接逻辑）
+private struct FollowUpEntryView: View {
+    var action: () -> Void = {}
+    
+    /// 圆形头像显示尺寸。换底图时导出 216×216 像素的正方形，资源名 FollowUpAvatar。
+    private let avatarSize: CGFloat = 72
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomTrailing) {
+                avatar
+                    .frame(width: avatarSize, height: avatarSize)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 3))
+                    .shadow(color: ResultTheme.primary.opacity(0.28), radius: 8, y: 3)
+                
+                ZStack {
+                    Circle()
+                        .fill(ResultTheme.primary)
+                    HStack(spacing: 2.5) {
+                        Circle().frame(width: 3.5, height: 3.5)
+                        Circle().frame(width: 3.5, height: 3.5)
+                    }
+                    .foregroundColor(.white)
+                }
+                .frame(width: 26, height: 26)
+                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .offset(x: 2, y: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("追问")
+    }
+    
+    private var avatar: some View {
+        FollowUpAvatarView()
+    }
+}
+
+struct FollowUpAvatarView: View {
+    var body: some View {
+        Group {
+            if UIImage(named: "FollowUpAvatar") != nil {
+                Image("FollowUpAvatar")
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                FollowUpPortrait()
+            }
+        }
+    }
+}
+
+// MARK: - 追问教练模块（解卦完成后展示，目前为假数据）
+private struct FollowUpCoachCard: View {
+    let questions: [String]
+    var onSelectQuestion: (String) -> Void = { _ in }
+    var onContinue: () -> Void = {}
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                FollowUpAvatarView()
+                    .frame(width: 52, height: 52)
+                    .background(
+                        Circle().fill(
+                            LinearGradient(
+                                colors: [ResultTheme.soft, ResultTheme.softStrong],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    )
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .shadow(color: ResultTheme.primary.opacity(0.18), radius: 4, y: 2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("追问教练")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    Text("看不懂？继续追问这次解卦")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer(minLength: 0)
+            }
+            
+            VStack(spacing: 10) {
+                ForEach(questions, id: \.self) { question in
+                    Button {
+                        onSelectQuestion(question)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(question)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(ResultTheme.primary)
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(ResultTheme.primary.opacity(0.7))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(ResultTheme.primary.opacity(0.35), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            
+            Button(action: onContinue) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bubble.left.fill")
+                    Text("继续追问本次解卦")
+                    Image(systemName: "arrow.right")
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(ResultTheme.fill)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: ResultTheme.primary.opacity(0.10), radius: 12, x: 0, y: 4)
         )
     }
+}
+
+struct FollowUpPortrait: View {
+    var body: some View {
+        Canvas { context, size in
+            let hair = Color(red: 0.28, green: 0.22, blue: 0.28)
+            let skin = Color(red: 0.99, green: 0.86, blue: 0.76)
+            let feature = Color(red: 0.42, green: 0.28, blue: 0.30)
+            
+            var hairPath = Path()
+            hairPath.addEllipse(in: CGRect(
+                x: size.width * 0.16,
+                y: size.height * 0.10,
+                width: size.width * 0.68,
+                height: size.height * 0.62
+            ))
+            context.fill(hairPath, with: .color(hair))
+            
+            var face = Path()
+            face.addEllipse(in: CGRect(
+                x: size.width * 0.27,
+                y: size.height * 0.28,
+                width: size.width * 0.46,
+                height: size.height * 0.46
+            ))
+            context.fill(face, with: .color(skin))
+            
+            var bangs = Path()
+            bangs.addEllipse(in: CGRect(
+                x: size.width * 0.22,
+                y: size.height * 0.12,
+                width: size.width * 0.56,
+                height: size.height * 0.28
+            ))
+            context.fill(bangs, with: .color(hair))
+            
+            let eyeY = size.height * 0.48
+            let eyeR: CGFloat = 2.4
+            context.fill(
+                Path(ellipseIn: CGRect(x: size.width * 0.36 - eyeR, y: eyeY - eyeR, width: eyeR * 2, height: eyeR * 2)),
+                with: .color(feature)
+            )
+            context.fill(
+                Path(ellipseIn: CGRect(x: size.width * 0.64 - eyeR, y: eyeY - eyeR, width: eyeR * 2, height: eyeR * 2)),
+                with: .color(feature)
+            )
+            
+            var smile = Path()
+            smile.addArc(
+                center: CGPoint(x: size.width * 0.50, y: size.height * 0.56),
+                radius: size.width * 0.09,
+                startAngle: .degrees(25),
+                endAngle: .degrees(155),
+                clockwise: false
+            )
+            context.stroke(smile, with: .color(Color(red: 0.93, green: 0.62, blue: 0.58)), lineWidth: max(1.4, size.width * 0.028))
+        }
+        .clipShape(Circle())
+    }
+}
+
+#Preview {
+    let mockHex = HexagramData.getHexagram(for: "000111")
+    DivinationResultPageView(
+        question: "这段关系该如何处理？",
+        tossResults: [false, false, false, true, true, true],
+        hexagramData: (name: mockHex.name, description: mockHex.description),
+        currentLocation: "解析失败",
+        onDismiss: {},
+        castTime: Date()
+    )
 }

@@ -149,7 +149,11 @@ struct HexagramData {
     ]
     
     static func getHexagram(for binary: String) -> (name: String, description: String) {
-        return hexagrams[binary] ?? ("未知卦象", "卦象信息未找到")
+        let engineName = LiuYaoHexagram.name(forBits: binary)
+        if let entry = hexagrams[binary] {
+            return (engineName ?? entry.name, entry.description)
+        }
+        return (engineName ?? "未知卦象", "卦象信息未找到")
     }
     
     // 新增方法：根据布尔数组获取卦象数据

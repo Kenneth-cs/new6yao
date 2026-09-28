@@ -71,7 +71,7 @@ struct HistoryView: View {
                     ScrollView {
                         LazyVStack(spacing: 16) {
                             ForEach(records, id: \.id) { record in
-                                NavigationLink(destination: HistoryDetailView(record: record)) {
+                                NavigationLink(destination: DivinationArchiveView(record: record)) {
                                     HistoryRecordCardContent(record: record)
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -140,6 +140,10 @@ struct HistoryRecordCardContent: View {
                     .lineLimit(2)
                 
                 Spacer()
+
+                if let badge = record.modeBadgeTitle {
+                    InterpretationModeBadge(title: badge)
+                }
             }
             
             // 卦象
@@ -177,248 +181,41 @@ struct HistoryRecordCardContent: View {
     }
 }
 
-// MARK: - 历史记录详情
+// MARK: - 历史记录详情（复用最新结果页样式）
 struct HistoryDetailView: View {
     let record: DivinationRecord
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // 问题
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("您的问题")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Text(record.question ?? "未知问题")
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .multilineTextAlignment(.leading)
-                    }
-                    
-                    // 卦象
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("卦象")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [.purple, .indigo]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        VStack(spacing: 8) {
-                            ForEach(Array(record.tossResults.enumerated().reversed()), id: \.offset) { index, result in
-                                HStack {
-                                    Text("第\(6-index)爻")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 40, alignment: .leading)
-                                    
-                                    if result {
-                                        Rectangle()
-                                            .fill(
-                                                LinearGradient(
-                                                    gradient: Gradient(colors: [.purple, .indigo]),
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                            .frame(width: 60, height: 8)
-                                    } else {
-                                        HStack(spacing: 4) {
-                                            Rectangle()
-                                                .fill(
-                                                    LinearGradient(
-                                                        gradient: Gradient(colors: [.purple, .indigo]),
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .frame(width: 28, height: 8)
-                                            Rectangle()
-                                                .fill(
-                                                    LinearGradient(
-                                                        gradient: Gradient(colors: [.purple, .indigo]),
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .frame(width: 28, height: 8)
-                                        }
-                                    }
-                                    
-                                    Text(result ? "阳" : "阴")
-                                        .font(.caption)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(result ? .orange : .blue)
-                                    
-                                    Spacer()
-                                }
-                            }
-                        }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [.purple.opacity(0.05), .indigo.opacity(0.03)]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
-                    }
-                    
-                    // AI解读
-                    if let interpretation = record.aiInterpretation, !interpretation.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "brain.head.profile")
-                                    .foregroundColor(.purple)
-                                    .font(.title3)
-                                Text("卦象分析")
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.purple)
-                                Spacer()
-                            }
-                            
-                            FormattedDivinationText(content: cleanText(interpretation))
-                        }
-                        .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [.purple.opacity(0.08), .indigo.opacity(0.05)]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
-                    }
-                    
-                    // 建议指导
-                    if let advice = record.advice, !advice.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "lightbulb.fill")
-                                    .foregroundColor(.orange)
-                                    .font(.title3)
-                                Text("建议指导")
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.orange)
-                                Spacer()
-                            }
-                            
-                            FormattedDivinationText(content: cleanText(advice))
-                        }
-                        .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [.orange.opacity(0.08), .yellow.opacity(0.05)]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
-                    }
-                    
-                    // 时间信息
-                    HStack {
-                        Image(systemName: "clock")
-                            .foregroundColor(.secondary)
-                        Text("问卦时间: \(record.formattedDate)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .padding(.top, 8)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-            }
-            .navigationTitle("问卦详情")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(.purple)
-                }
-            }
-        }
+        DivinationResultPageView(
+            question: record.question ?? "未知问题",
+            tossResults: record.tossResults,
+            yaoLines: record.yaoLines,
+            hexagramData: record.resolvedHexagram,
+            currentLocation: record.locationName ?? "未记录",
+            onDismiss: { dismiss() },
+            isHistoryRecord: true,
+            savedInterpretation: record.aiInterpretation ?? "",
+            savedAdvice: record.advice ?? "",
+            castTime: record.resolvedCastTime,
+            interpretationMode: InterpretationMode(rawValue: record.interpretationMode ?? "") ?? .professional,
+            liuYaoChart: record.resolvedChart,
+            categorySource: CategorySource(rawValue: record.categorySource ?? "") ?? .unclassified,
+            sourceRecord: record
+        )
     }
-    
-    // MARK: - Helper Functions
-    
-    /// 清理和格式化文本，移除Markdown和特殊符号
-    private func cleanText(_ text: String) -> String {
-        var cleanedText = text
-        
-        // 移除所有Markdown符号和特殊字符
-        let symbolsToRemove = [
-            "#{1,6}",           // 标题符号
-            "\\*{3,}",          // 三个或更多星号
-            "\\*{2}",           // 加粗
-            "\\*",              // 斜体
-            "__",               // 加粗
-            "_",                // 斜体
-            "~~",               // 删除线
-            "`",                // 代码
-            "<[^>]+>",          // HTML标签
-            "\\[([^\\]]+)\\]\\([^)]+\\)"  // Markdown链接
-        ]
-        
-        for symbol in symbolsToRemove {
-            cleanedText = cleanedText.replacingOccurrences(of: symbol, with: "", options: .regularExpression)
-        }
-        
-        // 移除标题标记
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^#+ ", with: "", options: .regularExpression)
-        
-        // 将列表标记转换为项目符号
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\* ", with: "• ", options: .regularExpression)
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^- ", with: "• ", options: .regularExpression)
-        
-        // 移除只包含符号的行
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\s\\*\\-_=#:：、。，！？•·]+$", with: "", options: .regularExpression)
-        
-        // 移除行首/行尾空格
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^ +", with: "", options: .regularExpression)
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m) +$", with: "", options: .regularExpression)
-        
-        // 移除独立符号行
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=]+$", with: "", options: .regularExpression)
-        
-        // 移除特殊换行符
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^[\\*\\-_=#:：、。，！？•·]+$", with: "", options: .regularExpression)
-        
-        // 移除引号符号（使用Unicode转义）
-        cleanedText = cleanedText.replacingOccurrences(of: "\u{201C}", with: "")  // "
-        cleanedText = cleanedText.replacingOccurrences(of: "\u{201D}", with: "")  // "
-        cleanedText = cleanedText.replacingOccurrences(of: "\u{2018}", with: "")  // '
-        cleanedText = cleanedText.replacingOccurrences(of: "\u{2019}", with: "")  // '
-        
-        // 移除可能残留的单个星号
-        cleanedText = cleanedText.replacingOccurrences(of: "(?m)^\\* ", with: "• ", options: .regularExpression)
-        cleanedText = cleanedText.replacingOccurrences(of: " \\*$", with: "", options: .regularExpression)
-        
-        // 清理多余空行（连续3个以上换行变成2个）
-        while cleanedText.contains("\n\n\n") {
-            cleanedText = cleanedText.replacingOccurrences(of: "\n\n\n", with: "\n\n")
-        }
-        
-        return cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+struct InterpretationModeBadge: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption2)
+            .foregroundColor(.black)
+            .padding(4)
+            .background(Color.gray.opacity(0.18))
+            .cornerRadius(4)
     }
 }
 

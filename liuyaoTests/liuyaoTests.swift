@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import liuyao
+@testable import LifeCoach
 
 struct liuyaoTests {
 

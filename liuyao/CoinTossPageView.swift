@@ -6,9 +6,15 @@ struct CoinTossPageView: View {
     let question: String
     let currentTime: Date
     let locationManager: LocationManager
+    var categoryHint: String? = nil
     @Environment(\.dismiss) private var dismiss
     @StateObject private var permissionManager = PermissionManager.shared
     @State private var tossResults: [Bool] = []
+    @State private var yaoLines: [YaoXiang] = []
+    @State private var castTime: Date?
+    @State private var liuYaoChart: LiuYaoReading?
+    @State private var categorySource: CategorySource = .unclassified
+    @State private var chartBuildMs: Int = 0
     @State private var isAnimating = false
     @State private var showResult = false
     @State private var rotationAngle: Double = 0
@@ -17,6 +23,8 @@ struct CoinTossPageView: View {
     @State private var hasStarted = false
     @State private var hexagramInfo: (name: String, description: String)? = nil
     @State private var showResultPage = false
+    @State private var selectedMode: Int = 0  // 0=专业模式, 1=大师模式
+    @Namespace private var modeSwitchNamespace
     
     // iPad适配
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -88,20 +96,40 @@ struct CoinTossPageView: View {
                     .position(x: max(position.0, 0), y: max(position.1, 0))
             }
             
-            VStack(spacing: 24) {
-                // 问题显示
-                VStack(spacing: 8) {
-                    Text(hasStarted ? "正在起卦" : "准备开始起卦")
-                        .font(.title2)
-                        .foregroundColor(.white)
+            VStack(spacing: 20) {
+                // 顶部文字与问题
+                VStack(spacing: 14) {
+                    VStack(spacing: 6) {
+                        Text(hasStarted ? "正在起卦" : "准备开始起卦")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Text("专注当下 · 心诚则灵")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
                     
-                    Text(question)
+                    // 问题卡片（白色透明底）
+                    Text("“\(question)”")
                         .font(.body)
-                        .foregroundColor(.white.opacity(0.8))
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 24)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.15))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                        .padding(.horizontal, 24)
                 }
-                .padding(.top, 10)
+                .padding(.top, 8)
                 
                 // 硬币动画区域
                 VStack(spacing: 20) {
@@ -222,7 +250,7 @@ struct CoinTossPageView: View {
                 
                 // 开始分析按钮
                 if !hasStarted && !isAnimating {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 8) {
                         Button(action: {
                             startDivination()
                         }) {
@@ -247,16 +275,14 @@ struct CoinTossPageView: View {
                             .shadow(color: .yellow.opacity(0.4), radius: 8, x: 0, y: 4)
                         }
                         
-                        VStack(spacing: 8) {
-                            // 修复系统符号问题
-                            HStack {
-                                Image(systemName: "hand.wave.fill")  // 替换 "iphone.shake"
+                        VStack(spacing: 4) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "hand.wave.fill")
                                     .foregroundColor(.white.opacity(0.7))
                                 Text("或摇动手机开始")
                                     .foregroundColor(.white.opacity(0.7))
                             }
                             .font(.caption)
-                            
                             Text("将自动生成6次抛掷结果")
                                 .font(.caption2)
                                 .foregroundColor(.white.opacity(0.5))
@@ -272,8 +298,17 @@ struct CoinTossPageView: View {
                             .foregroundColor(.white)
                         
                         HStack(spacing: 10) {
-                            ForEach(0..<tossResults.count, id: \.self) { index in
-                                Text(tossResults[index] ? "阳" : "阴")
+                            ForEach(0..<yaoLines.count, id: \.self) { index in
+                                HStack(spacing: 4) {
+                                    Text(yaoLines[index].isMoving
+                                         ? (yaoLines[index].isYang ? "阳·动" : "阴·动")
+                                         : (yaoLines[index].isYang ? "阳" : "阴"))
+                                    if yaoLines[index].isMoving {
+                                        Circle()
+                                            .fill(Color.orange)
+                                            .frame(width: 6, height: 6)
+                                    }
+                                }
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.black)
@@ -282,16 +317,23 @@ struct CoinTossPageView: View {
                                     .background(
                                         LinearGradient(
                                             gradient: Gradient(colors: 
-                                                tossResults[index] ? [.yellow, .orange] : [.gray.opacity(0.7), .gray.opacity(0.5)]
+                                                yaoLines[index].isYang ? [.yellow, .orange] : [.gray.opacity(0.7), .gray.opacity(0.5)]
                                             ),
                                             startPoint: .top,
                                             endPoint: .bottom
                                         )
                                     )
                                     .cornerRadius(8)
-                                    .scaleEffect(index == tossResults.count - 1 && isAnimating ? 1.2 : 1.0)
-                                    .animation(.bouncy(duration: 0.5), value: tossResults.count)
+                                    .scaleEffect(index == yaoLines.count - 1 && isAnimating ? 1.2 : 1.0)
+                                    .animation(.bouncy(duration: 0.5), value: yaoLines.count)
                             }
+                        }
+                        if yaoLines.count == 6, let chart = liuYaoChart {
+                            Text(chart.changed == nil
+                                 ? "无动爻，不变"
+                                 : "本卦 \(chart.primary.name) · 变卦 \(chart.changed?.name ?? "")")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.85))
                         }
                     }
                 }
@@ -302,6 +344,9 @@ struct CoinTossPageView: View {
                 // 查看分析结果按钮
                 if tossResults.count >= 6 && !isAnimating, let hexagramData = hexagramInfo {
                     VStack(spacing: 16) {
+                        // 解读模式选择卡片
+                        interpretationModeSelectionCard
+                        
                         // 主要的结果按钮
                         Button(action: {
                             print("🔍 [CoinTossPageView] 结果按钮被点击")
@@ -354,6 +399,7 @@ struct CoinTossPageView: View {
                         DivinationResultPageView(
                             question: question,
                             tossResults: tossResults,
+                            yaoLines: yaoLines,
                             hexagramData: hexagramData,
                             currentLocation: locationManager.currentCity,
                             onDismiss: {
@@ -365,7 +411,12 @@ struct CoinTossPageView: View {
                                     dismiss()
                                     print("[CoinTossPageView] 已返回到根视图")
                                 }
-                            }
+                            },
+                            castTime: castTime ?? Date(),
+                            interpretationMode: selectedMode == 0 ? .professional : .master,
+                            liuYaoChart: liuYaoChart,
+                            categorySource: categorySource,
+                            chartBuildMs: chartBuildMs
                         )
                     }
                 }
@@ -384,22 +435,143 @@ struct CoinTossPageView: View {
                 }
             }
         }
+        .toolbar(.hidden, for: .tabBar)  // 进入起卦页隐藏底部 Tab
     }
     
+        
+    // MARK: - 子视图
+    private var interpretationModeSelectionCard: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.4))
+                    .frame(width: 30, height: 1)
+                Text("解读模式")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white.opacity(0.85))
+                    .fixedSize()
+                Rectangle()
+                    .fill(Color.white.opacity(0.4))
+                    .frame(width: 30, height: 1)
+            }
+            
+            // Tab 式左右滑动切换器
+            HStack(spacing: 0) {
+                modeTabButton(
+                    isSelected: selectedMode == 0,
+                    title: "专业模式",
+                    iconSelected: "checkmark.circle.fill",
+                    iconUnselected: "circle"
+                ) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        selectedMode = 0
+                    }
+                }
+                
+                modeTabButton(
+                    isSelected: selectedMode == 1,
+                    title: "大师模式",
+                    iconSelected: "checkmark.circle.fill",
+                    iconUnselected: "person"
+                ) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        selectedMode = 1
+                    }
+                }
+            }
+            .padding(4)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.12))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                    )
+            )
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 24)
+    }
+    
+    // 单个 Tab 按钮：选中时背后有一个跟随手指切换而滑动的白色药丸（matchedGeometryEffect）
+    private func modeTabButton(
+        isSelected: Bool,
+        title: String,
+        iconSelected: String,
+        iconUnselected: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? iconSelected : iconUnselected)
+                    .foregroundColor(isSelected ? .purple : .white.opacity(0.6))
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(isSelected ? .semibold : .medium)
+                    .foregroundColor(isSelected ? .purple : .white.opacity(0.75))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                ZStack {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+                            .matchedGeometryEffect(id: "modeSelectionBackground", in: modeSwitchNamespace)
+                    }
+                }
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     // MARK: - 私有方法
     private func startDivination() {
         hasStarted = true
         currentAnimationIndex = 0
         tossResults = []
+        yaoLines = []
+        castTime = nil
+        liuYaoChart = nil
         performNextToss()
     }
     
     private func performNextToss() {
         guard currentAnimationIndex < 6 else {
             isAnimating = false
-            // 所有抛掷完成后计算卦象信息
-            if tossResults.count == 6 {
-                hexagramInfo = HexagramData.getHexagram(for: tossResults.map { $0 ? "1" : "0" }.joined())
+            if yaoLines.count == 6 {
+                let bits = yaoLines.map { $0.isYang ? "1" : "0" }.joined()
+                hexagramInfo = HexagramData.getHexagram(for: bits)
+                let time = castTime ?? Date()
+                castTime = time
+                var moving: [Int: String] = [:]
+                for (index, line) in yaoLines.enumerated() where line.isMoving {
+                    moving[index + 1] = line.rawValue
+                }
+                let resolved = QuestionCategoryResolver.resolve(question: question, hint: categoryHint)
+                categorySource = resolved.source
+                let started = Date()
+                let city = locationManager.currentCity
+                liuYaoChart = LiuYaoEngine.buildReading(
+                    bits: bits,
+                    moving: moving,
+                    date: time,
+                    category: resolved.category,
+                    question: question,
+                    location: city.isEmpty ? nil : city
+                )
+                chartBuildMs = Int(Date().timeIntervalSince(started) * 1000)
             }
             return
         }
@@ -429,9 +601,12 @@ struct CoinTossPageView: View {
                 self.coinScale = 1.0
             }
             
-            // 生成抛掷结果
-            let result = Bool.random()
-            self.tossResults.append(result)
+            let xiang = YaoXiang.randomToss()
+            self.yaoLines.append(xiang)
+            self.tossResults.append(xiang.isYang)
+            if self.yaoLines.count == 6 {
+                self.castTime = Date()
+            }
             self.currentAnimationIndex += 1
             
             AnalyticsManager.shared.trackDivinationToss(tossCount: self.tossResults.count)

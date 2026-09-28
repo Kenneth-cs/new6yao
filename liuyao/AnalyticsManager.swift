@@ -136,7 +136,7 @@ final class AnalyticsManager {
         track(SubscriptionConfig.AnalyticsEvents.divinationTossCoin, name: "掷铜钱", params: ["toss_count": tossCount])
     }
     
-    func trackDivinationResult(hexagramName: String, waitTimeMs: Int, dailyCurrentCount: Int, userQuestion: String? = nil, aiInterpretation: String? = nil) {
+    func trackDivinationResult(hexagramName: String, waitTimeMs: Int, dailyCurrentCount: Int, userQuestion: String? = nil, aiInterpretation: String? = nil, extras: [String: Any] = [:]) {
         var params: [String: Any] = [
             "hexagram_name": hexagramName,
             "wait_time_ms": waitTimeMs,
@@ -144,6 +144,9 @@ final class AnalyticsManager {
         ]
         if let q = userQuestion { params["user_question"] = q }
         if let a = aiInterpretation { params["ai_interpretation"] = a }
+        for (key, value) in extras {
+            params[key] = value
+        }
         track(SubscriptionConfig.AnalyticsEvents.divinationViewResult, name: "查看卦象结果", params: params)
     }
     

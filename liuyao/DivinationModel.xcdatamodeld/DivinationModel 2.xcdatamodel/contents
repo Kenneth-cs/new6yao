@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23605" systemVersion="23G80" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="DivinationRecord" representedClassName="DivinationRecord" syncable="YES" codeGenerationType="class">
+        <attribute name="advice" optional="YES" attributeType="String"/>
+        <attribute name="aiInterpretation" optional="YES" attributeType="String"/>
+        <attribute name="castTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="categorySource" optional="YES" attributeType="String"/>
+        <attribute name="chartJSON" optional="YES" attributeType="Binary"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="engineCategory" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="interpretationMode" optional="YES" attributeType="String"/>
+        <attribute name="locationName" optional="YES" attributeType="String"/>
+        <attribute name="question" optional="YES" attributeType="String"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="tossResultsData" optional="YES" attributeType="Binary"/>
+        <attribute name="yaoLinesData" optional="YES" attributeType="Binary"/>
+        <relationship name="feedback" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="FeedbackRecord" inverseName="divination" inverseEntity="FeedbackRecord"/>
+    </entity>
+    <entity name="FeedbackRecord" representedClassName="FeedbackRecord" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="feedback" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="rating" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="divination" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DivinationRecord" inverseName="feedback" inverseEntity="DivinationRecord"/>
+    </entity>
+</model>

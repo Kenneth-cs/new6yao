@@ -9,7 +9,9 @@ class AIService: ObservableObject {
         question: String,
         tossResults: [Bool],
         divinationTime: Date,
-        divinationLocation: String
+        divinationLocation: String,
+        mode: InterpretationMode = .professional,
+        chart: LiuYaoReading? = nil
     ) async throws -> DivinationResult {
         
         // 获取卦象信息
@@ -25,20 +27,14 @@ class AIService: ObservableObject {
             hexagramYinYang: hexagramYinYang,
             tossResults: tossResults,
             divinationTime: divinationTime,
-            divinationLocation: divinationLocation
+            divinationLocation: divinationLocation,
+            chart: chart
         )
         
-        let requestBody: [String: Any] = [
-            "model": ConfigManager.shared.modelEndpoint,
-            "messages": [
-                [
-                    "role": "user",
-                    "content": prompt
-                ]
-            ],
-            "max_tokens": 2000,
-            "temperature": 0.7
-        ]
+        let requestBody = divinationRequestBody(
+            messages: [["role": "user", "content": prompt]],
+            mode: mode
+        )
         
         do {
             let response = try await NetworkService.shared.sendRequest(
@@ -72,7 +68,9 @@ class AIService: ObservableObject {
         tossResults: [Bool],
         divinationTime: Date,
         divinationLocation: String,
-        onUpdate: @escaping (String) -> Void
+        onUpdate: @escaping (String) -> Void,
+        mode: InterpretationMode = .professional,
+        chart: LiuYaoReading? = nil
     ) async throws -> DivinationResult {
         
         // 获取卦象信息
@@ -88,20 +86,14 @@ class AIService: ObservableObject {
             hexagramYinYang: hexagramYinYang,
             tossResults: tossResults,
             divinationTime: divinationTime,
-            divinationLocation: divinationLocation
+            divinationLocation: divinationLocation,
+            chart: chart
         )
         
-        let requestBody: [String: Any] = [
-            "model": ConfigManager.shared.modelEndpoint,
-            "messages": [
-                [
-                    "role": "user",
-                    "content": prompt
-                ]
-            ],
-            "max_tokens": 2000,
-            "temperature": 0.7
-        ]
+        let requestBody = divinationRequestBody(
+            messages: [["role": "user", "content": prompt]],
+            mode: mode
+        )
         
         do {
             let response = try await NetworkService.shared.sendRequest(
@@ -160,33 +152,33 @@ class AIService: ObservableObject {
         hexagram: HexagramData,
         tossResults: [Bool],
         divinationTime: Date = Date(),
-        divinationLocation: String = "未知地点"
+        divinationLocation: String = "未知地点",
+        mode: InterpretationMode = .professional,
+        chart: LiuYaoReading? = nil
     ) async throws -> String {
-        
-        let hexagramYinYang = tossResults.map { $0 ? "阳" : "阴" }.joined(separator: "-")
-        
-        // 构建AI提示词
-        let prompt = buildPrompt(
-            question: question,
-            hexagramName: hexagram.name,
-            hexagramDescription: hexagram.description,
-            hexagramYinYang: hexagramYinYang,
-            tossResults: tossResults,
-            divinationTime: divinationTime,
-            divinationLocation: divinationLocation
-        )
-        
-        let requestBody: [String: Any] = [
-            "model": ConfigManager.shared.modelEndpoint,
-            "messages": [
-                [
-                    "role": "user",
-                    "content": prompt
-                ]
-            ],
-            "max_tokens": 2000,
-            "temperature": 0.7
-        ]
+        let messages: [[String: Any]]
+        if mode == .master, let chart {
+            let pair = buildMasterPrompt(reading: chart, location: divinationLocation)
+            messages = [
+                ["role": "system", "content": pair.system],
+                ["role": "user", "content": pair.user]
+            ]
+        } else {
+            let hexagramYinYang = tossResults.map { $0 ? "阳" : "阴" }.joined(separator: "-")
+            let prompt = buildPrompt(
+                question: question,
+                hexagramName: hexagram.name,
+                hexagramDescription: hexagram.description,
+                hexagramYinYang: hexagramYinYang,
+                tossResults: tossResults,
+                divinationTime: divinationTime,
+                divinationLocation: divinationLocation,
+                chart: chart
+            )
+            messages = [["role": "user", "content": prompt]]
+        }
+
+        let requestBody = divinationRequestBody(messages: messages, mode: mode)
         
         do {
             print("[AIService] 开始发送AI请求...")
@@ -222,7 +214,8 @@ class AIService: ObservableObject {
         hexagramYinYang: String,
         tossResults: [Bool],
         divinationTime: Date,
-        divinationLocation: String
+        divinationLocation: String,
+        chart: LiuYaoReading? = nil
     ) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
@@ -230,9 +223,12 @@ class AIService: ObservableObject {
         
         let hour = Calendar.current.component(.hour, from: divinationTime)
         let chineseHour = getChineseHour(from: hour)
+        let pillars = LiuYaoCalendar.fourPillars(from: divinationTime)
+        let year = Calendar.current.component(.year, from: divinationTime)
+        let calendarLine = "当前是\(year)年\(pillars.year)年，月建\(pillars.month)"
         
-        return """
-        作为一位专业的决策分析师，请运用六爻框架为以下问题提供决策分析（当前是2025年乙巳年，9月乙酉月）：
+        var prompt = """
+        作为一位专业的决策分析师，请运用六爻框架为以下问题提供决策分析（\(calendarLine)）：
         
         问题：\(question)
         
@@ -245,6 +241,12 @@ class AIService: ObservableObject {
         
         请按以下格式提供分析：
         
+        【核心结论】
+        [50至80字。全程大白话，先给事件定性，再给一句当下最该做什么。不铺垫、不解释术语。]
+        
+        【核心断语】
+        [50至120字。用专业摘要直接回应用户问题，说明本卦最核心在说什么。]
+        
         【框架解析】
         [结合分析时间、地点，详细分析框架的含义和象征]
         
@@ -256,6 +258,92 @@ class AIService: ObservableObject {
         
         请用专业而通俗易懂的语言进行分析。注意：六爻是一套传统的决策分析框架，通过阴阳二元和六个维度来帮助理清思路，而非预测未来。分析应该基于当前形势、个人能力和客观规律，提供理性建议。
         """
+        if let chart {
+            prompt += """
+
+            以下为本地排盘事实（禁止改写其中任何字段）：
+            \(chart.jsonString())
+            输出格式必须保持【核心结论】【核心断语】【框架解析】【问题分析】【建议指导】五段，并在全文最后追加【一句话结论】和【追问建议】，不要改成其他结构。
+            """
+        }
+        prompt += """
+
+        【一句话结论】
+        [用40到80字直接说明这卦在说什么，写成卦象概述。禁止使用「这不是一卦」「不是一卦叫你」「而是一卦提醒你」这类句式，不要先否定再转折]
+
+        【追问建议】
+        Q1: （从"为什么"角度，针对主要判断的依据，15字以内）
+        Q2: （从"时机"或"行动"角度，15字以内）
+        Q3: （从"结果"或"趋势"角度，15字以内）
+        """
+        return prompt
+    }
+
+    private func divinationRequestBody(messages: [[String: Any]], mode: InterpretationMode) -> [String: Any] {
+        let maxTokens = mode == .master ? 8000 : 3000
+        let temperature = mode == .master ? 0.45 : 0.7
+        return [
+            "model": ConfigManager.shared.modelEndpoint,
+            "messages": messages,
+            "max_tokens": maxTokens,
+            "temperature": temperature
+        ]
+    }
+
+    private func buildMasterPrompt(reading: LiuYaoReading, location: String) -> (system: String, user: String) {
+        let lines = reading.primary.lines.map { $0.yinYang == "yang" ? "阳" : "阴" }.joined(separator: "-")
+        let moving = reading.primary.lines.compactMap { line -> String? in
+            guard let moving = line.moving else { return nil }
+            return "\(line.position)爻\(moving)"
+        }
+        let movingText = moving.isEmpty ? "无动爻，不变" : moving.joined(separator: "、")
+        func describe(_ marker: String) -> String {
+            guard let line = reading.primary.lines.first(where: { $0.shiYing == marker }) else { return "未提供" }
+            return "\(line.position)爻 \(line.liuQin) \(line.naJia.gan)\(line.naJia.zhi)\(line.wuXing) \(line.liuShen)"
+        }
+        let ganZhi = reading.castTime.ganZhi
+        let datetime = "\(reading.castTime.localTime) \(ganZhi.year)年 \(ganZhi.month)月 \(ganZhi.day)日 \(ganZhi.hour)时"
+        let replacements = [
+            "{{question}}": reading.question.text,
+            "{{datetime}}": datetime,
+            "{{location}}": location.isEmpty || location == "未知地点" ? "未提供" : location,
+            "{{original_hexagram}}": reading.primary.name,
+            "{{changed_hexagram}}": reading.changed?.name ?? "无动爻，不变",
+            "{{lines}}": lines,
+            "{{moving_lines}}": movingText,
+            "{{month_branch}}": reading.castTime.monthBranch,
+            "{{day_branch}}": reading.castTime.dayPillar,
+            "{{void_branches}}": reading.castTime.xunKong.joined(separator: "、"),
+            "{{shi_line}}": describe("世"),
+            "{{ying_line}}": describe("应"),
+            "{{liuyao_chart}}": reading.jsonString(),
+            "{{context}}": ""
+        ]
+        var user = MasterPromptTemplate.user
+        for (key, value) in replacements {
+            user = user.replacingOccurrences(of: key, with: value)
+        }
+        user += "\n\n" + yongShenInstruction(reading)
+        user += "\n" + locationInstruction(location)
+        user += "\n刑害只可引用排盘 xingHai 中已经列出的关系；列表为空则不要写刑害。"
+        return (MasterPromptTemplate.system, user)
+    }
+
+    private func yongShenInstruction(_ reading: LiuYaoReading) -> String {
+        guard let yong = reading.yongShen else {
+            return "当前问题未分类，请按所问之事综合取用神，不得假装已经指定用神，不得补造未提供的排盘字段。"
+        }
+        if yong.yingAsGuide {
+            return "本题以应爻为纲，排盘建议用神为应爻所临\(yong.liuQin)（可按第二步综合取用）。不得编造未上卦且未伏藏的六亲。"
+        }
+        return "排盘建议用神为\(yong.liuQin)（可按第二步综合取用）。不得编造未上卦且未伏藏的六亲。"
+    }
+
+    private func locationInstruction(_ location: String) -> String {
+        if location.isEmpty || location == "未知地点" || location == "未记录" {
+            return "本次未提供地域，方位与地域解析整段必须写：本次未提供地域，方位分析暂缺。不要编造方位。"
+        }
+        return "已提供地点名称，但未提供可计算的方位五行。方位与地域解析整段写：本次未提供地域，方位分析暂缺。不要根据城市名自行推断方位五行。"
     }
     
     private func parseAIResponse(_ content: String) -> (interpretation: String, advice: String) {

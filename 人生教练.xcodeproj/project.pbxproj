@@ -407,6 +407,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于语音追问，录制您的提问内容";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于语音追问，将您的问题转换为文字发送给追问教练";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -417,7 +419,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.8.3;
+				MARKETING_VERSION = 1.8.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "Dream-making.LifeCoach";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -442,6 +444,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于语音追问，录制您的提问内容";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于语音追问，将您的问题转换为文字发送给追问教练";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -452,7 +456,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.8.3;
+				MARKETING_VERSION = 1.8.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "Dream-making.LifeCoach";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import StoreKit
 
 struct ProfilePageView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -49,7 +50,10 @@ struct ProfilePageView: View {
                 
                 // 最近决策记录 (从成长档案移过来，始终显示)
                 RecentDecisionsSection(records: recentRecords)
-                
+
+                // 兑换码独立入口
+                RedeemCodeEntryRow()
+
                 // 应用管理
                 AppManagementSection(
                     showingCacheCleanup: $showingCacheCleanup,
@@ -1015,6 +1019,79 @@ struct PersonalSettingsSection: View {
     }
 }
 */
+
+// MARK: - 兑换码独立入口行
+struct RedeemCodeEntryRow: View {
+    @State private var redeemError: String?
+
+    var body: some View {
+        Button {
+            Task {
+                await presentOfferCodeRedeem()
+            }
+        } label: {
+            HStack(spacing: 16) {
+                // 左侧图标
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.purple.opacity(0.85), Color.indigo.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "gift.fill")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.white)
+                }
+
+                // 文字区域
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("兑换码")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text("输入兑换码，解锁专属权益")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(.systemGray3))
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+                    .shadow(color: Color.primary.opacity(0.08), radius: 8, x: 0, y: 4)
+            )
+        }
+        .buttonStyle(.plain)
+        .alert("兑换失败", isPresented: .constant(redeemError != nil)) {
+            Button("确定") { redeemError = nil }
+        } message: {
+            if let redeemError { Text(redeemError) }
+        }
+    }
+
+    private func presentOfferCodeRedeem() async {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+            redeemError = "无法获取当前窗口"
+            return
+        }
+        do {
+            try await AppStore.presentOfferCodeRedeemSheet(in: scene)
+        } catch {
+            redeemError = "兑换码无法使用，请确认后重试"
+        }
+    }
+}
 
 // MARK: - 应用管理区域
 struct AppManagementSection: View {

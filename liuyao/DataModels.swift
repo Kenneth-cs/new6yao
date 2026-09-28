@@ -32,8 +32,12 @@ class PersistenceController {
     
     init(inMemory: Bool = false) {
         container = NSPersistentContainer(name: "DivinationModel")
-        if inMemory {
-            container.persistentStoreDescriptions.first!.url = URL(fileURLWithPath: "/dev/null")
+        if let description = container.persistentStoreDescriptions.first {
+            description.shouldMigrateStoreAutomatically = true
+            description.shouldInferMappingModelAutomatically = true
+            if inMemory {
+                description.url = URL(fileURLWithPath: "/dev/null")
+            }
         }
         
         container.loadPersistentStores { _, error in
@@ -71,8 +75,93 @@ extension DivinationRecord {
         return formatter.string(from: date)
     }
     
+    var yaoLines: [YaoXiang] {
+        get {
+            if let data = yaoLinesData,
+               let lines = try? JSONDecoder().decode([YaoXiang].self, from: data),
+               !lines.isEmpty {
+                return lines
+            }
+            return tossResults.map { $0 ? .youngYang : .youngYin }
+        }
+        set {
+            yaoLinesData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    var liuYaoChart: LiuYaoReading? {
+        get {
+            guard let data = chartJSON else { return nil }
+            return try? JSONDecoder().decode(LiuYaoReading.self, from: data)
+        }
+        set {
+            chartJSON = try? JSONEncoder().encode(newValue)
+        }
+    }
+
     var hexagramDisplay: String {
-        return tossResults.map { $0 ? "阳" : "阴" }.joined(separator: " ")
+        yaoLines.map(\.shortLabel).joined(separator: " ")
+    }
+
+    var modeBadgeTitle: String? {
+        guard let raw = interpretationMode, let mode = InterpretationMode(rawValue: raw) else { return nil }
+        return mode.badgeTitle
+    }
+
+    var followUpSuggestions: [String] {
+        get {
+            guard let data = followUpSuggestionsData else { return [] }
+            return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        }
+        set {
+            followUpSuggestionsData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
+        }
+    }
+
+    var resolvedCastTime: Date {
+        castTime ?? createdAt ?? Date()
+    }
+
+    var resolvedHexagram: (name: String, description: String) {
+        let binary = tossResults.map { $0 ? "1" : "0" }.joined()
+        return HexagramData.getHexagram(for: binary)
+    }
+
+    var resolvedChart: LiuYaoReading? {
+        if let chart = liuYaoChart { return chart }
+        let lines = yaoLines
+        guard lines.count == 6 else { return nil }
+        let bits = lines.map { $0.isYang ? "1" : "0" }.joined()
+        var moving: [Int: String] = [:]
+        for (index, line) in lines.enumerated() where line.isMoving {
+            moving[index + 1] = line.rawValue
+        }
+        let resolved = QuestionCategoryResolver.resolve(question: question ?? "", hint: nil)
+        return LiuYaoEngine.buildReading(
+            bits: bits,
+            moving: moving,
+            date: resolvedCastTime,
+            category: resolved.category,
+            question: question ?? "",
+            location: locationName
+        )
+    }
+
+    var deductionReport: DeductionReport? {
+        get {
+            guard let deductionReportJSON else { return nil }
+            return try? JSONDecoder().decode(DeductionReport.self, from: Data(deductionReportJSON.utf8))
+        }
+        set {
+            deductionReportJSON = newValue.flatMap { report in
+                (try? JSONEncoder().encode(report)).flatMap { String(data: $0, encoding: .utf8) }
+            }
+        }
+    }
+
+    var latestFollowUpSession: FollowUpSession? {
+        let sessions = followUpSessions as? Set<FollowUpSession> ?? []
+        return sessions.max { ($0.updatedAt ?? .distantPast) < ($1.updatedAt ?? .distantPast) }
     }
     
     // 获取准确度评分
@@ -83,6 +172,21 @@ extension DivinationRecord {
     // 是否有反馈
     var hasFeedback: Bool {
         return feedback != nil
+    }
+}
+
+// MARK: - FollowUpSession
+extension FollowUpSession {
+    var messages: [FollowUpChatMessage] {
+        get {
+            guard let data = messagesJSON else { return [] }
+            return (try? JSONDecoder().decode([FollowUpChatMessage].self, from: data)) ?? []
+        }
+        set {
+            messagesJSON = try? JSONEncoder().encode(newValue)
+            let turns = newValue.filter { $0.role == .user }.count
+            totalTurns = Int16(clamping: turns)
+        }
     }
 }
 
@@ -112,12 +216,22 @@ class DataService: ObservableObject {
         self.viewContext = context
     }
     
+    @discardableResult
     func saveDivinationRecord(
         question: String,
         tossResults: [Bool],
         aiInterpretation: String,
-        advice: String
-    ) {
+        advice: String,
+        castTime: Date? = nil,
+        mode: InterpretationMode? = nil,
+        chart: LiuYaoReading? = nil,
+        yaoLines: [YaoXiang]? = nil,
+        category: String? = nil,
+        categorySource: CategorySource? = nil,
+        locationName: String? = nil,
+        oneSentenceConclusion: String? = nil,
+        followUpSuggestions: [String] = []
+    ) -> DivinationRecord? {
         let record = DivinationRecord(context: viewContext)
         record.id = UUID()
         record.question = question
@@ -125,12 +239,75 @@ class DataService: ObservableObject {
         record.aiInterpretation = aiInterpretation
         record.advice = advice
         record.createdAt = Date()
+        record.castTime = castTime
+        record.interpretationMode = mode?.rawValue
+        record.engineCategory = category ?? "unclassified"
+        record.categorySource = categorySource?.rawValue
+        record.locationName = locationName
+        record.oneSentenceConclusion = oneSentenceConclusion
+        record.followUpSuggestions = followUpSuggestions
+        if let yaoLines {
+            record.yaoLines = yaoLines
+        }
+        record.liuYaoChart = chart
         
         do {
             try viewContext.save()
             print("问卦记录保存成功")
+            return record
         } catch {
             print("保存失败: \(error)")
+            return nil
+        }
+    }
+
+    @discardableResult
+    func createFollowUpSession(for record: DivinationRecord?) -> FollowUpSession {
+        let session = FollowUpSession(context: viewContext)
+        session.id = UUID()
+        let now = Date()
+        session.createdAt = now
+        session.updatedAt = now
+        session.totalTurns = 0
+        session.messagesJSON = try? JSONEncoder().encode([FollowUpChatMessage]())
+        session.divinationRecord = record
+        saveContext(action: "创建追问会话")
+        return session
+    }
+
+    func saveFollowUpMessages(_ messages: [FollowUpChatMessage], to session: FollowUpSession) {
+        session.messages = messages
+        session.updatedAt = Date()
+        saveContext(action: "保存追问消息")
+    }
+
+    func fetchFollowUpSession(for record: DivinationRecord) -> FollowUpSession? {
+        record.latestFollowUpSession
+    }
+
+    func attach(_ session: FollowUpSession, to record: DivinationRecord) {
+        session.divinationRecord = record
+        saveContext(action: "关联追问会话")
+    }
+
+    @discardableResult
+    func saveDeductionReport(_ report: DeductionReport, for record: DivinationRecord?) -> Bool {
+        guard let record else { return false }
+        record.deductionReport = report
+        do {
+            try viewContext.save()
+            return true
+        } catch {
+            print("保存推演报告失败: \(error)")
+            return false
+        }
+    }
+
+    private func saveContext(action: String) {
+        do {
+            try viewContext.save()
+        } catch {
+            print("\(action)失败: \(error)")
         }
     }
     

@@ -14,13 +14,17 @@ struct DivinationPageView: View {
     let currentTime: Date
     let locationManager: LocationManager
     let defaultQuestion: String?
+    let categoryHint: String?
+    @State private var effectiveCategoryHint: String?
     
     private let maxLength = 500
     
-    init(currentTime: Date, locationManager: LocationManager, defaultQuestion: String? = nil) {
+    init(currentTime: Date, locationManager: LocationManager, defaultQuestion: String? = nil, categoryHint: String? = nil) {
         self.currentTime = currentTime
         self.locationManager = locationManager
         self.defaultQuestion = defaultQuestion
+        self.categoryHint = categoryHint
+        _effectiveCategoryHint = State(initialValue: categoryHint)
     }
     
     var body: some View {
@@ -180,7 +184,8 @@ struct DivinationPageView: View {
             CoinTossPageView(
                 question: question.isEmpty ? (defaultQuestion ?? "") : question,
                 currentTime: divinationStartTime ?? currentTime,
-                locationManager: locationManager
+                locationManager: locationManager,
+                categoryHint: effectiveCategoryHint
             )
         }
         .sheet(isPresented: $showSubscriptionPrompt) {
@@ -205,6 +210,10 @@ struct DivinationPageView: View {
             if let defaultQ = defaultQuestion {
                 question = defaultQ
             }
+        }
+        .onChange(of: question) { newValue in
+            guard let original = defaultQuestion else { return }
+            effectiveCategoryHint = newValue == original ? categoryHint : nil
         }
     }
     

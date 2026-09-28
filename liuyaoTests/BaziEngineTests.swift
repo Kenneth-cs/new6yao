@@ -1,5 +1,5 @@
 import XCTest
-@testable import liuyao
+@testable import LifeCoach
 
 // ============================================================
 // 四柱基准来源：以 2000-01-07 = 甲子日 为基准，精确推算（已与万年历交叉验证）

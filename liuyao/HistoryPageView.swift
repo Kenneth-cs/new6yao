@@ -96,7 +96,7 @@ struct HistoryPageView: View {
                     }
                     if showDivination {
                         ForEach(divinationRecords, id: \.objectID) { record in
-                            NavigationLink(destination: HistoryDetailView(record: record)) {
+                            NavigationLink(destination: DivinationArchiveView(record: record)) {
                                 HistoryRecordCardView(record: record)
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -274,6 +274,10 @@ struct HistoryRecordCardView: View {
                     .lineLimit(2)
                 
                 Spacer()
+
+                if let badge = record.modeBadgeTitle {
+                    InterpretationModeBadge(title: badge)
+                }
             }
             
             // 卦象
