@@ -228,6 +228,7 @@ struct UsageStatistics: Codable {
     var monthlyMatrixCount: Int = 0
     var totalHistoryRecords: Int = 0
     var dailyFiveElementCount: Int = 0  // 每日五行决策使用次数
+    var lifetimeSuccessfulDivinationCount: Int = 0
 
     var lastDailyResetDate: Date = Date()
     var lastMonthlyResetDate: Date = Date()
@@ -240,6 +241,7 @@ struct UsageStatistics: Codable {
         monthlyMatrixCount    = try c.decodeIfPresent(Int.self,  forKey: .monthlyMatrixCount)    ?? 0
         totalHistoryRecords   = try c.decodeIfPresent(Int.self,  forKey: .totalHistoryRecords)   ?? 0
         dailyFiveElementCount = try c.decodeIfPresent(Int.self,  forKey: .dailyFiveElementCount) ?? 0
+        lifetimeSuccessfulDivinationCount = try c.decodeIfPresent(Int.self, forKey: .lifetimeSuccessfulDivinationCount) ?? 0
         lastDailyResetDate    = try c.decodeIfPresent(Date.self, forKey: .lastDailyResetDate)    ?? Date()
         lastMonthlyResetDate  = try c.decodeIfPresent(Date.self, forKey: .lastMonthlyResetDate)  ?? Date()
     }
@@ -381,7 +383,7 @@ extension FeatureComparisonItem {
     static let allFeatures: [FeatureComparisonItem] = [
         FeatureComparisonItem(
             name: "摇卦分析",
-            freeDescription: "每天 1 次",
+            freeDescription: "每天 1 次成功分析",
             proDescription: "无限次数",
             icon: "sparkles"
         ),

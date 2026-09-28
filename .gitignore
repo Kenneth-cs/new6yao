@@ -7,9 +7,15 @@ DerivedData/
 *.dSYM.zip
 *.dSYM
 
+# Xcode 本地构建产物（含编译缓存、.env、API Key 等敏感文件）
+.xcode-derived/
+.xcode-derived-device/
+
 # API Keys (如果有的话)
 *.plist
 Secrets.swift
+.env
+**/.env
 
 # macOS
 .DS_Store

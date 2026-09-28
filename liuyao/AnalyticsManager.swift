@@ -137,17 +137,29 @@ final class AnalyticsManager {
     }
     
     func trackDivinationResult(hexagramName: String, waitTimeMs: Int, dailyCurrentCount: Int, userQuestion: String? = nil, aiInterpretation: String? = nil, extras: [String: Any] = [:]) {
+        let requestId = extras["request_id"] as? String
+        guard shouldReportFirstSuccess(requestId: requestId) else { return }
         var params: [String: Any] = [
             "hexagram_name": hexagramName,
             "wait_time_ms": waitTimeMs,
-            "daily_current_count": dailyCurrentCount
+            "daily_current_count": dailyCurrentCount,
+            "is_first_success": true
         ]
+        if let requestId { params["request_id"] = requestId }
         if let q = userQuestion { params["user_question"] = q }
         if let a = aiInterpretation { params["ai_interpretation"] = a }
         for (key, value) in extras {
             params[key] = value
         }
         track(SubscriptionConfig.AnalyticsEvents.divinationViewResult, name: "查看卦象结果", params: params)
+    }
+
+    func trackDivinationFail(requestId: String, errorCode: Int, waitTimeMs: Int) {
+        track(SubscriptionConfig.AnalyticsEvents.divinationFail, name: "解卦失败", params: [
+            "request_id": requestId,
+            "error_code": errorCode,
+            "wait_time_ms": waitTimeMs
+        ])
     }
     
     func trackMatrixNew(scenario: String) {
@@ -166,18 +178,63 @@ final class AnalyticsManager {
         track(SubscriptionConfig.AnalyticsEvents.decisionClickDecide, name: "点击告诉我纠结")
     }
     
-    func trackMatrixSubmit(optionsCount: Int) {
-        track(SubscriptionConfig.AnalyticsEvents.matrixSubmit, name: "提交选项分析", params: ["options_count": optionsCount])
+    func trackMatrixSubmit(optionsCount: Int, requestId: String) {
+        track(SubscriptionConfig.AnalyticsEvents.matrixSubmit, name: "提交选项分析", params: [
+            "options_count": optionsCount,
+            "request_id": requestId
+        ])
     }
     
-    func trackMatrixResult(hasVeto: Bool, topScoreLevel: String, userQuestion: String? = nil, aiResult: String? = nil) {
+    func trackMatrixResult(hasVeto: Bool, topScoreLevel: String, userQuestion: String? = nil, aiResult: String? = nil, requestId: String, waitTimeMs: Int) {
+        guard shouldReportFirstSuccess(requestId: requestId) else { return }
         var params: [String: Any] = [
             "has_veto": hasVeto,
-            "top_score_level": topScoreLevel
+            "top_score_level": topScoreLevel,
+            "request_id": requestId,
+            "wait_time_ms": waitTimeMs,
+            "is_first_success": true
         ]
         if let q = userQuestion { params["user_question"] = q }
         if let a = aiResult { params["ai_result"] = a }
         track(SubscriptionConfig.AnalyticsEvents.matrixViewResult, name: "查看矩阵结果", params: params)
+    }
+
+    func trackMatrixFail(requestId: String, errorCode: Int, waitTimeMs: Int) {
+        track(SubscriptionConfig.AnalyticsEvents.matrixFail, name: "矩阵分析失败", params: [
+            "request_id": requestId,
+            "error_code": errorCode,
+            "wait_time_ms": waitTimeMs
+        ])
+    }
+
+    func trackDecisionSubmit(requestId: String, optionsCount: Int) {
+        track(SubscriptionConfig.AnalyticsEvents.decisionSubmit, name: "提交五行决策", params: [
+            "request_id": requestId,
+            "options_count": optionsCount
+        ])
+    }
+
+    func trackDecisionResult(hasVeto: Bool, topScoreLevel: String, userQuestion: String? = nil, aiResult: String? = nil, requestId: String, waitTimeMs: Int) {
+        guard shouldReportFirstSuccess(requestId: requestId) else { return }
+        var params: [String: Any] = [
+            "has_veto": hasVeto,
+            "top_score_level": topScoreLevel,
+            "request_id": requestId,
+            "wait_time_ms": waitTimeMs,
+            "is_first_success": true
+        ]
+        if let q = userQuestion { params["user_question"] = q }
+        if let a = aiResult { params["ai_result"] = a }
+        track(SubscriptionConfig.AnalyticsEvents.decisionViewResult, name: "查看五行决策结果", params: params)
+        incrementDecisionCount()
+    }
+
+    func trackDecisionFail(requestId: String, errorCode: Int, waitTimeMs: Int) {
+        track(SubscriptionConfig.AnalyticsEvents.decisionFail, name: "五行决策失败", params: [
+            "request_id": requestId,
+            "error_code": errorCode,
+            "wait_time_ms": waitTimeMs
+        ])
     }
     
     func trackSwotNew() {
@@ -239,11 +296,30 @@ final class AnalyticsManager {
         setUserProperty("total_matrix_count", value: current + 1)
     }
 
+    func incrementDecisionCount() {
+        let current = userProperties["total_decision_count"] as? Int ?? 0
+        setUserProperty("total_decision_count", value: current + 1)
+    }
+
     func incrementSwotCount() {
         let current = userProperties["total_swot_count"] as? Int ?? 0
         setUserProperty("total_swot_count", value: current + 1)
     }
     
+    private let reportedSuccessIdsKey = "analytics_success_request_ids"
+
+    private func shouldReportFirstSuccess(requestId: String?) -> Bool {
+        guard let requestId, !requestId.isEmpty else { return true }
+        var ids = userDefaults.stringArray(forKey: reportedSuccessIdsKey) ?? []
+        if ids.contains(requestId) { return false }
+        ids.append(requestId)
+        if ids.count > 300 {
+            ids = Array(ids.suffix(300))
+        }
+        userDefaults.set(ids, forKey: reportedSuccessIdsKey)
+        return true
+    }
+
     func updateDaysSinceInstall() {
         let installDate = userDefaults.object(forKey: "app_install_date") as? Date ?? {
             let now = Date()

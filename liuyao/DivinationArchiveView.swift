@@ -83,16 +83,16 @@ struct DivinationArchiveView: View {
                     header
                     infoCard
                     entryCard(
-                        icon: "doc.text.fill",
-                        iconColor: Color(red: 0.36, green: 0.42, blue: 0.96),
+                        icon: "doc.plaintext.fill",
+                        iconColor: ResultTheme.primary,
                         title: "解卦结果",
                         subtitle: "已完成 · 深度解读完整报告",
-                        action: "查看完整报告",
+                        action: "查看报告",
                         destination: HistoryDetailView(record: record)
                     )
                     entryCard(
                         icon: "chart.bar.fill",
-                        iconColor: Color(red: 0.55, green: 0.36, blue: 0.95),
+                        iconColor: ResultTheme.primary,
                         title: "局势推演",
                         subtitle: record.deductionReport == nil
                             ? "尚未推演"
@@ -101,8 +101,8 @@ struct DivinationArchiveView: View {
                         destination: ArchiveDeductionDestination(record: record)
                     )
                     entryCard(
-                        icon: "bubble.left.and.bubble.right.fill",
-                        iconColor: Color(red: 0.22, green: 0.62, blue: 0.78),
+                        icon: "ellipsis.bubble.fill",
+                        iconColor: ResultTheme.primary,
                         title: "追问记录",
                         subtitle: followUpTurns > 0 ? "已追问 \(followUpTurns) 次" : "尚未追问",
                         action: "继续追问",

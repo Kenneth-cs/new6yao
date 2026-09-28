@@ -25,11 +25,11 @@ class NetworkService {
     
     // 网络配置
     private struct NetworkConfig {
-        static let connectTimeout: TimeInterval = 15  // 减少连接超时
-        static let readTimeout: TimeInterval = 180    // 增加读取超时到 3 分钟
-        static let maxRetries = 2                     // 减少重试次数
-        static let baseRetryDelay: TimeInterval = 2.0
-        static let maxRetryDelay: TimeInterval = 10.0
+        static let connectTimeout: TimeInterval = 15
+        static let readTimeout: TimeInterval = 180   // 大师模式最多 8000 token，需要足够长
+        static let maxRetries = 2
+        static let baseRetryDelay: TimeInterval = 1.5
+        static let maxRetryDelay: TimeInterval = 6.0
     }
     
     private func setupNetworkMonitoring() {
@@ -77,13 +77,12 @@ class NetworkService {
         }
         // ----------------------------------------
         
-        // 检查网络连接
-        guard isNetworkAvailable else {
-            print("[NetworkService] 网络不可用，无法发送请求")
-            throw NetworkError.noNetworkConnection
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else {
+            throw NetworkError.missingAPIKey
         }
-        
-        // 确保URL格式正确
+
+        // 路径探测仅作提示，不作为硬门槛（VPN / 切网时容易误判）
         guard let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw NetworkError.invalidURL
         }
@@ -218,14 +217,15 @@ class NetworkService {
                 }
                 throw NetworkError.decodingError
             }
+        } catch let error as NetworkError {
+            throw error
+        } catch let urlError as URLError {
+            let duration = Date().timeIntervalSince(startTime)
+            print("[NetworkService] URLError: \(urlError.localizedDescription) (\(urlError.code.rawValue)) 耗时 \(String(format: "%.2f", duration))秒")
+            throw NetworkError.from(urlError: urlError)
         } catch {
             let duration = Date().timeIntervalSince(startTime)
             print("[NetworkService] 请求失败，耗时: \(String(format: "%.2f", duration))秒")
-            
-            if let urlError = error as? URLError {
-                print("[NetworkService] URLError详情: \(urlError.localizedDescription) (代码: \(urlError.code.rawValue))")
-            }
-            
             throw NetworkError.networkError(error)
         }
     }
@@ -251,10 +251,10 @@ class NetworkService {
             case .serverError(let code):
                 // 5xx 服务器错误和429(请求过多)可以重试
                 return code >= 500 || code == 429
-            case .noNetworkConnection, .requestTimeout, .connectionFailed:
+            case .noNetworkConnection, .requestTimeout, .connectionFailed, .dnsFailure:
                 return true
-            case .invalidURL, .encodingError, .decodingError, .invalidResponse:
-                return false // 这些是客户端错误，重试无意义
+            case .invalidURL, .encodingError, .decodingError, .invalidResponse, .missingAPIKey, .cancelled, .tlsFailure:
+                return false
             }
         }
         
@@ -276,6 +276,36 @@ enum NetworkError: Error, LocalizedError {
     case noNetworkConnection
     case requestTimeout
     case connectionFailed
+    case missingAPIKey
+    case dnsFailure
+    case tlsFailure
+    case cancelled
+
+    static func from(urlError: URLError) -> NetworkError {
+        switch urlError.code {
+        case .timedOut:
+            return .requestTimeout
+        case .notConnectedToInternet, .dataNotAllowed:
+            return .noNetworkConnection
+        case .cannotFindHost, .dnsLookupFailed:
+            return .dnsFailure
+        case .cannotConnectToHost:
+            return .connectionFailed
+        case .networkConnectionLost:
+            return .connectionFailed
+        case .secureConnectionFailed,
+             .serverCertificateUntrusted,
+             .serverCertificateHasUnknownRoot,
+             .serverCertificateHasBadDate,
+             .clientCertificateRejected,
+             .clientCertificateRequired:
+            return .tlsFailure
+        case .cancelled:
+            return .cancelled
+        default:
+            return .networkError(urlError)
+        }
+    }
     
     var errorDescription: String? {
         switch self {
@@ -297,6 +327,14 @@ enum NetworkError: Error, LocalizedError {
             return "请求超时，请稍后重试"
         case .connectionFailed:
             return "连接失败，请检查网络连接"
+        case .missingAPIKey:
+            return "服务配置缺失"
+        case .dnsFailure:
+            return "无法解析服务器地址"
+        case .tlsFailure:
+            return "安全连接失败"
+        case .cancelled:
+            return "请求已取消"
         }
     }
     

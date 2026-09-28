@@ -21,6 +21,20 @@ struct AIRequestSlot: Codable {
     var hexagramAnalysis: String?
     var questionInterpretation: String?
     var guidanceAdvice: String?
+    // 失败时保留真实错误编号，恢复时不丢失
+    var failureCode: Int?
+
+    init(status: AIRequestStatus, result: String, timestamp: Date,
+         hexagramAnalysis: String? = nil, questionInterpretation: String? = nil,
+         guidanceAdvice: String? = nil, failureCode: Int? = nil) {
+        self.status = status
+        self.result = result
+        self.timestamp = timestamp
+        self.hexagramAnalysis = hexagramAnalysis
+        self.questionInterpretation = questionInterpretation
+        self.guidanceAdvice = guidanceAdvice
+        self.failureCode = failureCode
+    }
 }
 
 final class AIRequestStateStore: ObservableObject {
@@ -64,8 +78,8 @@ final class AIRequestStateStore: ObservableObject {
         sendNotificationIfBackgrounded(for: key)
     }
 
-    func markFailed(key: String, message: String) {
-        let slot = AIRequestSlot(status: .failed, result: message, timestamp: Date())
+    func markFailed(key: String, message: String, failureCode: Int? = nil) {
+        let slot = AIRequestSlot(status: .failed, result: message, timestamp: Date(), failureCode: failureCode)
         update(key: key, slot: slot)
     }
 

@@ -61,7 +61,10 @@ class PermissionManager: ObservableObject {
         // 检查是否需要重置计数器
         checkAndResetCounters()
         
-        // 免费版检查次数限制
+        // 免费版：按「成功分析」计数。从未成功过的用户可一直重试，直到拿到第 1 次成功结果。
+        if usageStats.lifetimeSuccessfulDivinationCount == 0 {
+            return true
+        }
         return usageStats.dailyDivinationCount < usageQuota.dailyDivinationLimit
     }
     
@@ -115,34 +118,61 @@ class PermissionManager: ObservableObject {
     
     // MARK: - 使用次数增加方法
     
-    /// 增加问卦使用次数
+    /// 增加问卦使用次数（仅在 AI 成功返回有效解读后调用）
     func incrementDivinationCount() {
-        // 专业版不计数
-        guard !currentTier.isPro else { return }
+        usageStats.lifetimeSuccessfulDivinationCount += 1
+        guard !currentTier.isPro else {
+            saveUsageStatistics()
+            return
+        }
         
         usageStats.dailyDivinationCount += 1
         saveUsageStatistics()
         
-        print("📊 问卦次数 +1，当前：\(usageStats.dailyDivinationCount)/\(usageQuota.dailyDivinationLimit)")
+        print("📊 问卦成功次数 +1，当前：\(usageStats.dailyDivinationCount)/\(usageQuota.dailyDivinationLimit)")
+    }
+
+    /// 失败、超时或取消时返还问卦次数（仅当此前已预扣）
+    func refundDivinationCount() {
+        guard !currentTier.isPro else { return }
+        guard usageStats.dailyDivinationCount > 0 else { return }
+        usageStats.dailyDivinationCount -= 1
+        saveUsageStatistics()
+        print("📊 问卦次数已返还，当前：\(usageStats.dailyDivinationCount)/\(usageQuota.dailyDivinationLimit)")
     }
     
-    /// 增加SWOT使用次数
+    /// 增加SWOT使用次数（仅在 AI 成功后调用）
     func incrementSWOTCount() {
-        // 专业版不计数
         guard !currentTier.isPro else { return }
         
         usageStats.monthlySWOTCount += 1
         saveUsageStatistics()
         
-        print("📊 SWOT次数 +1，当前：\(usageStats.monthlySWOTCount)/\(usageQuota.monthlySWOTLimit)")
+        print("📊 SWOT成功次数 +1，当前：\(usageStats.monthlySWOTCount)/\(usageQuota.monthlySWOTLimit)")
+    }
+
+    func refundSWOTCount() {
+        guard !currentTier.isPro else { return }
+        guard usageStats.monthlySWOTCount > 0 else { return }
+        usageStats.monthlySWOTCount -= 1
+        saveUsageStatistics()
+        print("📊 SWOT次数已返还，当前：\(usageStats.monthlySWOTCount)/\(usageQuota.monthlySWOTLimit)")
     }
     
-    /// 增加决策矩阵使用次数
+    /// 增加决策矩阵使用次数（仅在 AI 成功后调用）
     func incrementMatrixCount() {
         guard !currentTier.isPro else { return }
         usageStats.monthlyMatrixCount += 1
         saveUsageStatistics()
-        print("📊 决策矩阵次数 +1，当前：\(usageStats.monthlyMatrixCount)/\(usageQuota.monthlyMatrixLimit)")
+        print("📊 决策矩阵成功次数 +1，当前：\(usageStats.monthlyMatrixCount)/\(usageQuota.monthlyMatrixLimit)")
+    }
+
+    func refundMatrixCount() {
+        guard !currentTier.isPro else { return }
+        guard usageStats.monthlyMatrixCount > 0 else { return }
+        usageStats.monthlyMatrixCount -= 1
+        saveUsageStatistics()
+        print("📊 决策矩阵次数已返还，当前：\(usageStats.monthlyMatrixCount)/\(usageQuota.monthlyMatrixLimit)")
     }
 
     /// 增加五行决策使用次数（每天计数）
@@ -168,6 +198,9 @@ class PermissionManager: ObservableObject {
         }
         
         checkAndResetCounters()
+        if usageStats.lifetimeSuccessfulDivinationCount == 0 {
+            return max(1, usageQuota.dailyDivinationLimit)
+        }
         let remaining = usageQuota.dailyDivinationLimit - usageStats.dailyDivinationCount
         return max(0, remaining)
     }
@@ -203,7 +236,7 @@ class PermissionManager: ObservableObject {
         switch feature {
         case .divination:
             let remaining = getDailyDivinationRemaining()
-            return "今日还剩 \(remaining) 次"
+            return "今日还剩 \(remaining) 次成功分析"
             
         case .swot:
             let remaining = getMonthlySWOTRemaining()

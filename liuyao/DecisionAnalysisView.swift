@@ -68,7 +68,7 @@ struct DecisionAnalysisView: View {
                     // 快捷场景（原示例问题）
                     quickScenariosSection
                     
-                    // 最近的推演
+                    // 最近记录
                     recentHistorySection
                 }
                 .padding(.horizontal, 20)
@@ -111,7 +111,7 @@ struct DecisionAnalysisView: View {
     private func fetchRecentRecords() {
         let request: NSFetchRequest<DivinationRecord> = DivinationRecord.fetchRequest()
         request.sortDescriptors = [NSSortDescriptor(keyPath: \DivinationRecord.createdAt, ascending: false)]
-        request.fetchLimit = 3 // 取最近3条历史记录
+        request.fetchLimit = 10 // 每次取最近 10 条，按时间倒序
         
         do {
             recentRecords = try viewContext.fetch(request)
@@ -362,12 +362,12 @@ struct DecisionAnalysisView: View {
         }
     }
     
-    // MARK: - 最近的推演
+    // MARK: - 最近记录
     
     private var recentHistorySection: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("最近的推演")
+                Text("最近记录")
                     .font(.title3)
                     .fontWeight(.bold)
                     .foregroundColor(.primary)
@@ -389,7 +389,7 @@ struct DecisionAnalysisView: View {
             
             if recentRecords.isEmpty {
                 // 如果没有记录可以显示暂无
-                Text("暂无推演记录")
+                Text("暂无记录")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -402,7 +402,7 @@ struct DecisionAnalysisView: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(recentRecords) { record in
-                        NavigationLink(destination: HistoryDetailView(record: record)) {
+                        NavigationLink(destination: DivinationArchiveView(record: record)) {
                             HStack(spacing: 12) {
                                 // 左侧卦象Icon
                                 Image("tab-hexagram")

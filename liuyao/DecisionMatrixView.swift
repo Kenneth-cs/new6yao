@@ -20,7 +20,10 @@ struct DecisionMatrixView: View {
     @State private var showSubscriptionPrompt = false
     @State private var showLimitReached = false
     @ObservedObject private var aiStore = AIRequestStateStore.shared
-    private let matrixKey = "matrix_latest"
+    @State private var requestId = UUID().uuidString
+    @State private var analysisStartedAt: Date?
+    @State private var analysisFailure: AIRequestFailure?
+    private var matrixKey: String { "matrix_\(requestId)" }
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -269,8 +272,6 @@ struct DecisionMatrixView: View {
     
     private func checkPermissionAndAnalyze() {
         if permissionManager.canUseMatrix() {
-            permissionManager.incrementMatrixCount()
-            AnalyticsManager.shared.trackMatrixSubmit(optionsCount: options.count)
             analyzeWithAI()
         } else {
             showLimitReached = true
@@ -278,9 +279,13 @@ struct DecisionMatrixView: View {
     }
     
     private func analyzeWithAI() {
+        requestId = UUID().uuidString
+        analysisStartedAt = Date()
+        analysisFailure = nil
         isLoadingAI = true
         showAIAnalysis = true
         aiStore.markLoading(key: matrixKey)
+        AnalyticsManager.shared.trackMatrixSubmit(optionsCount: options.count, requestId: requestId)
         
         Task {
             do {
@@ -309,17 +314,44 @@ struct DecisionMatrixView: View {
                 """
                 
                 let result = try await AIService.shared.getSimpleAIResponse(prompt: prompt)
+                let waitMs = Int(Date().timeIntervalSince(analysisStartedAt ?? Date()) * 1000)
                 
                 await MainActor.run {
                     aiAnalysis = result
                     isLoadingAI = false
+                    analysisFailure = nil
                     aiStore.markSuccess(key: matrixKey, result: result)
+                    permissionManager.incrementMatrixCount()
+                    AnalyticsManager.shared.incrementMatrixCount()
+                    let topScore = options.map(\.score).max() ?? 0
+                    let level: String
+                    switch topScore {
+                    case 8...: level = "高"
+                    case 5..<8: level = "中"
+                    default: level = "低"
+                    }
+                    AnalyticsManager.shared.trackMatrixResult(
+                        hasVeto: false,
+                        topScoreLevel: level,
+                        userQuestion: problemTitle,
+                        aiResult: result,
+                        requestId: requestId,
+                        waitTimeMs: waitMs
+                    )
                 }
             } catch {
+                let failure = AIRequestFailure.from(error)
+                let waitMs = Int(Date().timeIntervalSince(analysisStartedAt ?? Date()) * 1000)
                 await MainActor.run {
-                    aiAnalysis = "分析失败：\(error.localizedDescription)"
+                    analysisFailure = failure
+                    aiAnalysis = "\(failure.headline(prefix: "矩阵失败"))\n\(failure.title)\n\(failure.message)"
                     isLoadingAI = false
                     aiStore.markFailed(key: matrixKey, message: aiAnalysis)
+                    AnalyticsManager.shared.trackMatrixFail(
+                        requestId: requestId,
+                        errorCode: failure.code,
+                        waitTimeMs: waitMs
+                    )
                 }
             }
         }

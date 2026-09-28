@@ -8,7 +8,6 @@ struct CoinTossPageView: View {
     let locationManager: LocationManager
     var categoryHint: String? = nil
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var permissionManager = PermissionManager.shared
     @State private var tossResults: [Bool] = []
     @State private var yaoLines: [YaoXiang] = []
     @State private var castTime: Date?
@@ -353,9 +352,6 @@ struct CoinTossPageView: View {
                             print("📝 问题: \(question)")
                             print("🎲 抛掷结果: \(tossResults)")
                             print("📊 框架信息: \(hexagramData)")
-                            
-                            // 增加使用次数计数
-                            permissionManager.incrementDivinationCount()
                             
                             // 延迟一点点再触发导航，确保UI更新完成
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

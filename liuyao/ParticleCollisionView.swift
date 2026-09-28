@@ -38,6 +38,11 @@ struct ParticleCollisionView: View {
     // ── AI 状态 ──
     @State private var matrixResultV2: DecisionMatrixResultV2? = nil
     @State private var animationDone = false
+    @State private var showFailure = false
+    @State private var analysisFailure: AIRequestFailure?
+    @State private var requestId = UUID().uuidString
+    @State private var aiRequestStartedAt: Date?
+    @State private var animationToken = 0
 
     // 五行轨道粒子定义：(element, 轨道半径, 速度倍率, 初始相位°, 粒子直径)
     // 速度倍率须为 0.1 的整数倍，保证 100 圈后连续无跳变
@@ -81,6 +86,8 @@ struct ParticleCollisionView: View {
                 Group {
                     if showWarning {
                         warningCard.transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if showFailure {
+                        failureCard.transition(.move(edge: .bottom).combined(with: .opacity))
                     } else if showCompletion {
                         completionCard.transition(.move(edge: .bottom).combined(with: .opacity))
                     } else {
@@ -91,6 +98,7 @@ struct ParticleCollisionView: View {
             }
             .animation(.spring(response: 0.5), value: showWarning)
             .animation(.spring(response: 0.5), value: showCompletion)
+            .animation(.spring(response: 0.5), value: showFailure)
         }
         .offset(x: shakeOffset)
         .navigationTitle("五行能量碰撞")
@@ -475,6 +483,42 @@ struct ParticleCollisionView: View {
         .padding(.horizontal, 20).padding(.bottom, 34)
     }
 
+    // MARK: - 失败卡
+    private var failureCard: some View {
+        let failure = analysisFailure ?? .code800
+        return VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange).font(.title3)
+                Text(failure.headline(prefix: "决策失败"))
+                    .font(.headline).fontWeight(.bold).foregroundColor(.white)
+            }
+            Text(failure.title)
+                .font(.subheadline).fontWeight(.medium).foregroundColor(.white)
+            Text(failure.message)
+                .font(.subheadline).foregroundColor(Color.white.opacity(0.75))
+                .multilineTextAlignment(.center)
+
+            Button(action: retryAnalysis) {
+                Text("重新分析")
+                    .font(.subheadline).fontWeight(.semibold).foregroundColor(.primary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(Color.white).cornerRadius(14)
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color(red: 0.10, green: 0.08, blue: 0.14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(Color.orange.opacity(0.55), lineWidth: 1.5)
+                )
+        )
+        .shadow(color: Color.orange.opacity(0.20), radius: 24)
+        .padding(.horizontal, 20).padding(.bottom, 34)
+    }
+
     // MARK: - 熔断警告卡
     private var warningCard: some View {
         VStack(spacing: 14) {
@@ -550,6 +594,8 @@ struct ParticleCollisionView: View {
 
     // MARK: - 动画进度流程
     private func startAnimation() {
+        animationToken += 1
+        let token = animationToken
         let steps: [(Double, String, Double)] = [
             (0.3,  "解析五行属性...", 0.15),
             (1.0,  "计算命局强弱...", 0.38),
@@ -558,10 +604,12 @@ struct ParticleCollisionView: View {
             (3.8,  "生成决策报告...", 0.92),
         ]
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            guard token == animationToken else { return }
             phase = .running
         }
         for (delay, text, val) in steps {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard token == animationToken else { return }
                 withAnimation(.easeInOut(duration: 0.4)) {
                     progressText  = text
                     progressValue = val
@@ -569,6 +617,7 @@ struct ParticleCollisionView: View {
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.3) {
+            guard token == animationToken else { return }
             withAnimation { progressValue = 1.0; phase = .done }
             animationDone = true
             tryNavigateToResult()
@@ -579,27 +628,59 @@ struct ParticleCollisionView: View {
     private func startAIAnalysis() {
         let scenarioName = scenario?.name ?? "通用决策"
         let validOptions = options.isEmpty ? [optionA, optionB] : options
+        requestId = UUID().uuidString
+        aiRequestStartedAt = Date()
+        analysisFailure = nil
+        AnalyticsManager.shared.trackDecisionSubmit(requestId: requestId, optionsCount: validOptions.count)
         Task {
             do {
                 let result = try await AIService.shared.analyzeDecisionMatrixV2(
                     portrait: portrait, options: validOptions,
                     scenario: scenarioName, question: question
                 )
+                let waitMs = Int(Date().timeIntervalSince(aiRequestStartedAt ?? Date()) * 1000)
                 await MainActor.run {
                     matrixResultV2 = result
-                    // 扣除本次使用次数
                     PermissionManager.shared.incrementFiveElementDecisionCount()
-                    // 保存历史记录
                     let record = MatrixDecisionRecord(
                         scenario: scenario, question: question,
                         options: validOptions, result: result
                     )
                     MatrixHistoryStore.shared.save(record)
+                    let topScore = result.recommendedOption?.score ?? 0
+                    let level: String
+                    switch topScore {
+                    case 80...: level = "大吉"
+                    case 60..<80: level = "小吉"
+                    case 40..<60: level = "平"
+                    default: level = "凶"
+                    }
+                    let aiResultJSON: String? = {
+                        guard let data = try? JSONEncoder().encode(result),
+                              let json = String(data: data, encoding: .utf8) else { return nil }
+                        return json
+                    }()
+                    AnalyticsManager.shared.trackDecisionResult(
+                        hasVeto: result.hasFatalRisk,
+                        topScoreLevel: level,
+                        userQuestion: question,
+                        aiResult: aiResultJSON,
+                        requestId: requestId,
+                        waitTimeMs: waitMs
+                    )
                     tryNavigateToResult()
                 }
             } catch {
+                let failure = AIRequestFailure.from(error)
+                let waitMs = Int(Date().timeIntervalSince(aiRequestStartedAt ?? Date()) * 1000)
                 await MainActor.run {
-                    matrixResultV2 = .mock
+                    matrixResultV2 = nil
+                    analysisFailure = failure
+                    AnalyticsManager.shared.trackDecisionFail(
+                        requestId: requestId,
+                        errorCode: failure.code,
+                        waitTimeMs: waitMs
+                    )
                     tryNavigateToResult()
                 }
             }
@@ -608,7 +689,13 @@ struct ParticleCollisionView: View {
 
     // MARK: - 动画 + AI 双完成后触发结果
     private func tryNavigateToResult() {
-        guard animationDone, matrixResultV2 != nil else { return }
+        guard animationDone else { return }
+        if let failure = analysisFailure {
+            withAnimation { progressText = failure.headline(prefix: "决策失败") }
+            withAnimation(.spring(response: 0.5)) { showFailure = true }
+            return
+        }
+        guard matrixResultV2 != nil else { return }
 
         if matrixResultV2?.hasFatalRisk == true {
             withAnimation { progressText = "⚡ 检测到强力冲突！" }
@@ -616,12 +703,26 @@ struct ParticleCollisionView: View {
             triggerWarningEffects()
         } else {
             withAnimation { progressText = "✅ 分析完成" }
-            // 粒子先飞向中心，再浮出完成卡
             withAnimation(.spring(response: 0.55)) { particlesAbsorbed = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                 withAnimation(.spring(response: 0.5)) { showCompletion = true }
             }
         }
+    }
+
+    private func retryAnalysis() {
+        showFailure = false
+        showCompletion = false
+        showWarning = false
+        animationDone = false
+        analysisFailure = nil
+        matrixResultV2 = nil
+        progressValue = 0
+        progressText = "解析五行属性..."
+        phase = .idle
+        particlesAbsorbed = false
+        startAnimation()
+        startAIAnalysis()
     }
 
     // MARK: - 屏幕震动 + 红晕（熔断）

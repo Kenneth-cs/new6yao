@@ -102,13 +102,16 @@ struct DivinationResultPageView: View {
     }
 
     private var requestKey: String {
-        let hexBinary = displayYao.map { $0.isYang ? "1" : "0" }.joined()
-        return "divination_\(hexBinary)_\(abs(question.hashValue))_\(interpretationMode.rawValue)"
+        "divination_\(requestId)"
     }
     @State private var masterParseOk = false
     @StateObject private var dataService = DataService()
     @State private var networkMonitor = NWPathMonitor()
     @State private var isNetworkAvailable = true
+    @State private var requestId = UUID().uuidString
+    @State private var currentFailure: AIRequestFailure?
+    @State private var aiRequestStartedAt: Date?
+    @State private var didRecordSuccess = false
     @Environment(\.dismiss) private var dismiss
     
     private let yaoGradient = ResultTheme.yao
@@ -283,7 +286,6 @@ struct DivinationResultPageView: View {
                 startNetworkMonitoring()
                 return
             }
-            AnalyticsManager.shared.incrementDivinationCount()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 startNetworkMonitoring()
                 if let slot = aiStore.slot(for: requestKey) {
@@ -304,6 +306,12 @@ struct DivinationResultPageView: View {
                         isLoading = false
                     case .failed:
                         aiInterpretation = slot.result
+                        // 从缓存恢复真实错误码，避免统一显示 800
+                        if let code = slot.failureCode {
+                            currentFailure = AIRequestFailure.from(code: code)
+                        } else {
+                            currentFailure = AIRequestFailure.code800
+                        }
                         isLoading = false
                     }
                 } else {
@@ -493,7 +501,7 @@ struct DivinationResultPageView: View {
                     }
                 }
                 .padding(.vertical, 18)
-                .padding(.horizontal, 28)
+                .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -501,7 +509,7 @@ struct DivinationResultPageView: View {
                 )
                 
                 VStack(spacing: 4) {
-                    Text("'\(hexagramData.name)'")
+                    Text(hexagramData.name)
                         .font(.body)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)
@@ -516,24 +524,8 @@ struct DivinationResultPageView: View {
     }
     
     private func yaoRow(isYang: Bool, isMoving: Bool, detail: String?) -> some View {
-        HStack(spacing: 12) {
-            Group {
-                if isYang {
-                    Capsule()
-                        .fill(yaoGradient)
-                        .frame(width: 118, height: 7)
-                } else {
-                    HStack(spacing: 10) {
-                        Capsule()
-                            .fill(yaoGradient)
-                            .frame(width: 54, height: 7)
-                        Capsule()
-                            .fill(yaoGradient)
-                            .frame(width: 54, height: 7)
-                    }
-                }
-            }
-            
+        HStack(spacing: 14) {
+            yaoStroke(isYang: isYang)
             HStack(spacing: 4) {
                 Text(isYang ? "阳" : "阴")
                     .font(.caption)
@@ -547,12 +539,37 @@ struct DivinationResultPageView: View {
             }
             .frame(width: 36, alignment: .leading)
 
-            if let detail {
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+            Text(detail ?? "")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .frame(width: 64, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    /// 阳爻与阴爻共用同一总宽，避免长短不一导致左右错位。
+    private func yaoStroke(isYang: Bool) -> some View {
+        let segment: CGFloat = 52
+        let gap: CGFloat = 14
+        let total = segment * 2 + gap
+        return Group {
+            if isYang {
+                Capsule()
+                    .fill(yaoGradient)
+                    .frame(width: total, height: 7)
+            } else {
+                HStack(spacing: gap) {
+                    Capsule()
+                        .fill(yaoGradient)
+                        .frame(width: segment, height: 7)
+                    Capsule()
+                        .fill(yaoGradient)
+                        .frame(width: segment, height: 7)
+                }
             }
         }
+        .frame(width: total, height: 7, alignment: .center)
     }
     
     // MARK: - 解读区域
@@ -560,8 +577,8 @@ struct DivinationResultPageView: View {
     private var interpretationSection: some View {
         if isLoading {
             loadingCard
-        } else if aiInterpretation.contains("解读失败") || aiInterpretation.contains("超时") || aiInterpretation.contains("网络") {
-            errorCard
+        } else if let failure = currentFailure {
+            errorCard(failure)
         } else if interpretationMode == .master {
             MasterReportView(rawText: aiInterpretation)
         } else {
@@ -650,7 +667,7 @@ struct DivinationResultPageView: View {
             HStack(spacing: 6) {
                 Text("💡")
                     .font(.subheadline)
-                Text("解读过程可能需要30-60秒")
+                Text("解读通常需要十几秒")
                     .font(.subheadline)
                     .foregroundColor(.orange)
             }
@@ -668,19 +685,24 @@ struct DivinationResultPageView: View {
         )
     }
     
-    private var errorCard: some View {
+    private func errorCard(_ failure: AIRequestFailure) -> some View {
         whiteCard {
             VStack(spacing: 12) {
-                Image(systemName: "wifi.exclamationmark")
+                Image(systemName: "exclamationmark.triangle.fill")
                     .font(.title2)
                     .foregroundColor(.orange)
                 
-                Text("网络请求超时")
+                Text(failure.headline(prefix: "解卦失败"))
                     .font(.headline)
                     .foregroundColor(.primary)
                 
-                Text("请检查网络连接，或稍后重试")
+                Text(failure.title)
                     .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                Text(failure.message)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                 
@@ -813,6 +835,9 @@ struct DivinationResultPageView: View {
         pendingNewArchive = true
         persistedFollowUpSession = nil
         aiStore.clearSlot(key: requestKey)
+        requestId = UUID().uuidString
+        currentFailure = nil
+        didRecordSuccess = false
         isLoading = true
         aiInterpretation = ""
         hexagramAnalysis = ""
@@ -897,26 +922,15 @@ struct DivinationResultPageView: View {
     // MARK: - 私有方法
     private func requestAIInterpretation() {
         print("[DivinationResultPageView] 开始请求AI解读")
+        currentFailure = nil
+        didRecordSuccess = false
+        aiRequestStartedAt = Date()
         aiStore.markLoading(key: requestKey)
-        
-        // 检查网络连接
-        if !isNetworkAvailable {
-            print("[DivinationResultPageView] 网络不可用")
-            aiInterpretation = "网络连接不可用，请检查网络设置后重试。"
-            isLoading = false
-            return
-        }
         
         print("[DivinationResultPageView] 卦象信息: \(hexagramData.name)")
         
         Task {
             do {
-                // 先测试API连接
-                print("[DivinationResultPageView] 测试API连接...")
-                let testResult = try await aiService.testAPIConnection()
-                print("[DivinationResultPageView] API连接测试结果: \(testResult)")
-                
-                // 如果测试成功，进行正式解读
                 print("[DivinationResultPageView] 调用AIService.interpretDivinationStream")
                 let hexagramStruct = HexagramData(name: hexagramData.name, description: hexagramData.description)
                 
@@ -931,31 +945,15 @@ struct DivinationResultPageView: View {
                 )
                 
                 print("[DivinationResultPageView] AI解读完成，长度: \(interpretation.count)")
+                let trimmed = interpretation.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    throw AIServiceError.noResponse
+                }
                 
                 await MainActor.run {
                     self.applyRawInterpretation(interpretation)
                     self.isLoading = false
-                    let waitMs = Int(Date().timeIntervalSince(self.castTime) * 1000)
-                    let usageStats = UserDefaults.standard.usageStatistics
-                    let movingCount = self.displayYao.filter(\.isMoving).count
-                    AnalyticsManager.shared.trackDivinationResult(
-                        hexagramName: self.hexagramData.name,
-                        waitTimeMs: waitMs,
-                        dailyCurrentCount: usageStats.dailyDivinationCount,
-                        userQuestion: self.question,
-                        aiInterpretation: interpretation,
-                        extras: [
-                            "interpretation_mode": self.interpretationMode.rawValue,
-                            "has_moving_lines": movingCount > 0,
-                            "moving_count": movingCount,
-                            "engine_category": self.liuYaoChart?.question.category ?? "unclassified",
-                            "category_source": self.categorySource.rawValue,
-                            "chart_build_ms": self.chartBuildMs,
-                            "ai_max_tokens": self.interpretationMode == .master ? 8000 : 3000,
-                            "master_section_parse_ok": self.interpretationMode == .master ? self.masterParseOk : false,
-                            "question_length": self.question.count
-                        ]
-                    )
+                    self.recordSuccessfulInterpretation(raw: interpretation)
                     DispatchQueue.main.async {
                         self.aiStore.markSuccess(
                             key: self.requestKey,
@@ -968,24 +966,51 @@ struct DivinationResultPageView: View {
                 }
             } catch {
                 print("[DivinationResultPageView] AI解读失败: \(error.localizedDescription)")
-                
-                // 更详细的错误处理
-                let errorMessage: String
-                if let networkError = error as? NetworkError {
-                    errorMessage = networkError.localizedDescription
-                } else if let aiError = error as? AIServiceError {
-                    errorMessage = aiError.localizedDescription
-                } else {
-                    errorMessage = "网络连接超时，请检查网络后重试"
-                }
+                let failure = AIRequestFailure.from(error)
+                let waitMs = Int(Date().timeIntervalSince(self.aiRequestStartedAt ?? Date()) * 1000)
                 
                 await MainActor.run {
-                    self.aiInterpretation = "解读失败：\(errorMessage)"
+                    self.currentFailure = failure
+                    self.aiInterpretation = "解读失败：\(failure.headline(prefix: "解卦失败"))"
                     self.isLoading = false
-                    self.aiStore.markFailed(key: self.requestKey, message: "解读失败：\(errorMessage)")
+                    self.aiStore.markFailed(key: self.requestKey, message: self.aiInterpretation, failureCode: failure.code)
+                    AnalyticsManager.shared.trackDivinationFail(
+                        requestId: self.requestId,
+                        errorCode: failure.code,
+                        waitTimeMs: waitMs
+                    )
                 }
             }
         }
+    }
+
+    private func recordSuccessfulInterpretation(raw: String) {
+        guard !didRecordSuccess else { return }
+        didRecordSuccess = true
+        PermissionManager.shared.incrementDivinationCount()
+        AnalyticsManager.shared.incrementDivinationCount()
+        let waitMs = Int(Date().timeIntervalSince(aiRequestStartedAt ?? castTime) * 1000)
+        let usageStats = UserDefaults.standard.usageStatistics
+        let movingCount = displayYao.filter(\.isMoving).count
+        AnalyticsManager.shared.trackDivinationResult(
+            hexagramName: hexagramData.name,
+            waitTimeMs: waitMs,
+            dailyCurrentCount: usageStats.dailyDivinationCount,
+            userQuestion: question,
+            aiInterpretation: raw,
+            extras: [
+                "request_id": requestId,
+                "interpretation_mode": interpretationMode.rawValue,
+                "has_moving_lines": movingCount > 0,
+                "moving_count": movingCount,
+                "engine_category": liuYaoChart?.question.category ?? "unclassified",
+                "category_source": categorySource.rawValue,
+                "chart_build_ms": chartBuildMs,
+                "ai_max_tokens": interpretationMode == .master ? 8000 : 3000,
+                "master_section_parse_ok": interpretationMode == .master ? masterParseOk : false,
+                "question_length": question.count
+            ]
+        )
     }
     
     private func saveResult() {

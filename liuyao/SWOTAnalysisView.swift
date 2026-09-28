@@ -269,8 +269,6 @@ struct SWOTAnalysisView: View {
     
     private func checkPermissionAndAnalyze() {
         if permissionManager.canUseSWOT() {
-            permissionManager.incrementSWOTCount()
-            AnalyticsManager.shared.trackSwotSubmit()
             analyzeWithAI()
         } else {
             showLimitReached = true
@@ -311,12 +309,16 @@ struct SWOTAnalysisView: View {
                     aiAnalysis = result
                     isLoadingAI = false
                     aiStore.markSuccess(key: swotKey, result: result)
+                    permissionManager.incrementSWOTCount()
+                    AnalyticsManager.shared.incrementSwotCount()
+                    AnalyticsManager.shared.trackSwotSubmit()
                     let waitMs = Int(Date().timeIntervalSince(swotStartTime ?? Date()) * 1000)
                     AnalyticsManager.shared.trackSwotResult(waitTimeMs: waitMs)
                 }
             } catch {
                 await MainActor.run {
-                    aiAnalysis = "分析失败：\(error.localizedDescription)"
+                    let failure = AIRequestFailure.from(error)
+                    aiAnalysis = "\(failure.headline(prefix: "分析失败"))\n\(failure.title)\n\(failure.message)"
                     isLoadingAI = false
                     aiStore.markFailed(key: swotKey, message: aiAnalysis)
                 }

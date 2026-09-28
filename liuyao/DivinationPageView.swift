@@ -105,7 +105,7 @@ struct DivinationPageView: View {
                     HStack {
                         Image(systemName: "info.circle.fill")
                             .foregroundColor(.blue)
-                        Text("今日还剩 \(remaining) 次免费分析")
+                        Text("今日还剩 \(remaining) 次成功分析")
                             .font(.subheadline)
                             .foregroundColor(.blue)
                         
