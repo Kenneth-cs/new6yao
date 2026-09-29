@@ -22,6 +22,7 @@ struct CoinTossPageView: View {
     @State private var hasStarted = false
     @State private var hexagramInfo: (name: String, description: String)? = nil
     @State private var showResultPage = false
+    @State private var showMasterCheckout = false
     @State private var selectedMode: Int = 0  // 0=专业模式, 1=大师模式
     @Namespace private var modeSwitchNamespace
     
@@ -337,8 +338,8 @@ struct CoinTossPageView: View {
                     }
                 }
                 
-                Spacer()
-                    .frame(maxHeight: 60)
+                Spacer(minLength: 12)
+                    .frame(maxHeight: 20)
                 
                 // 查看分析结果按钮
                 if tossResults.count >= 6 && !isAnimating, let hexagramData = hexagramInfo {
@@ -353,6 +354,14 @@ struct CoinTossPageView: View {
                             print("🎲 抛掷结果: \(tossResults)")
                             print("📊 框架信息: \(hexagramData)")
                             
+                            // 大师模式次数判断后续再接。现在一律先盖结算卡，不进入解读。
+                            if selectedMode == 1 {
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) {
+                                    showMasterCheckout = true
+                                }
+                                return
+                            }
+
                             // 延迟一点点再触发导航，确保UI更新完成
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 showResultPage = true
@@ -388,7 +397,7 @@ struct CoinTossPageView: View {
                                 .opacity(0.8)
                         }
                     }
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 12)
                     
                     // 使用fullScreenCover方式，确保完全独立的导航上下文
                     .fullScreenCover(isPresented: $showResultPage) {
@@ -416,6 +425,8 @@ struct CoinTossPageView: View {
                         )
                     }
                 }
+
+                Spacer(minLength: 0)
             }
         }
         .navigationTitle("开始起卦")
@@ -432,6 +443,17 @@ struct CoinTossPageView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)  // 进入起卦页隐藏底部 Tab
+        .overlay {
+            if showMasterCheckout {
+                MasterReadingCheckoutView {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                        showMasterCheckout = false
+                    }
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
     }
     
         
@@ -479,10 +501,10 @@ struct CoinTossPageView: View {
             .padding(4)
             .background(
                 Capsule()
-                    .fill(Color.white.opacity(0.12))
+                    .fill(Color.white.opacity(0.08))
                     .overlay(
                         Capsule()
-                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
                     )
             )
         }
@@ -490,10 +512,10 @@ struct CoinTossPageView: View {
         .padding(.horizontal, 20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.1))
+                .fill(Color.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 24)

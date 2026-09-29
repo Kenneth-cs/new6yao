@@ -51,7 +51,7 @@ struct LimitReachedView: View {
         var message: String {
             switch self {
             case .dailyDivination:
-                return "免费版用户每天可获得 1 次成功分析"
+                return "免费版用户每天可获得 1 次专业分析"
             case .monthlySWOT:
                 return "免费版用户每月可以使用10次SWOT分析"
             case .monthlyMatrix:

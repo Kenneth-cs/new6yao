@@ -36,48 +36,43 @@ struct ProfilePageView: View {
     }
     
     // 提取公共的内容视图
+    // 新版「我的」按设计稿展示。UserInfoSection / SubscriptionStatusCard /
+    // StatisticsPanel / RecentDecisionsSection / RedeemCodeEntryRow / AppManagementSection
+    // 均保留，假数据开关关闭后历史区会回到 RecentDecisionsSection。
     private var profileContent: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // 用户信息区域
-                UserInfoSection()
-                
-                // 订阅状态卡片（新增）
-                SubscriptionStatusCard()
-                
-                // 统计面板
-                StatisticsPanel(statisticsService: statisticsService)
-                
-                // 最近决策记录 (从成长档案移过来，始终显示)
-                RecentDecisionsSection(records: recentRecords)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                ProfileHeaderSection(usesPreviewData: profileUsesMockData)
 
-                // 兑换码独立入口
-                RedeemCodeEntryRow()
+                VStack(spacing: 18) {
+                    UnlockFeaturesSection()
 
-                // 应用管理
-                AppManagementSection(
-                    showingCacheCleanup: $showingCacheCleanup,
-                    showingDataBackup: $showingDataBackup,
-                    showingPrivacySettings: $showingPrivacySettings
-                )
+                    if profileUsesMockData {
+                        ProfilePreviewHistorySection()
+                    } else {
+                        RecentDecisionsSection(records: recentRecords)
+                    }
+
+                    ProfileStatsSection(
+                        statisticsService: statisticsService,
+                        usesPreviewData: profileUsesMockData
+                    )
+
+                    ProfileAppManagementSection(
+                        showingCacheCleanup: $showingCacheCleanup,
+                        showingPrivacySettings: $showingPrivacySettings
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 2)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
         }
-        .navigationTitle("个人中心")
-        .navigationBarTitleDisplayMode(.large)
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color.purple.opacity(0.05),
-                    Color.indigo.opacity(0.03),
-                    Color(.systemBackground)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-        )
+        .background(ProfilePalette.page.ignoresSafeArea())
+        .ignoresSafeArea(edges: .top)
+        .profileHidesTopScrollEdge()
+        .toolbar(.hidden, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingCacheCleanup) {
             CacheCleanupView()
         }

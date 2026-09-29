@@ -61,7 +61,7 @@ class PermissionManager: ObservableObject {
         // 检查是否需要重置计数器
         checkAndResetCounters()
         
-        // 免费版：按「成功分析」计数。从未成功过的用户可一直重试，直到拿到第 1 次成功结果。
+        // 免费版：按「专业分析」计数。从未成功过的用户可一直重试，直到拿到第 1 次成功结果。
         if usageStats.lifetimeSuccessfulDivinationCount == 0 {
             return true
         }
@@ -236,7 +236,7 @@ class PermissionManager: ObservableObject {
         switch feature {
         case .divination:
             let remaining = getDailyDivinationRemaining()
-            return "今日还剩 \(remaining) 次成功分析"
+            return "今日还剩 \(remaining) 次专业分析"
             
         case .swot:
             let remaining = getMonthlySWOTRemaining()

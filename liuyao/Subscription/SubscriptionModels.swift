@@ -383,7 +383,7 @@ extension FeatureComparisonItem {
     static let allFeatures: [FeatureComparisonItem] = [
         FeatureComparisonItem(
             name: "摇卦分析",
-            freeDescription: "每天 1 次成功分析",
+            freeDescription: "每天 1 次专业分析",
             proDescription: "无限次数",
             icon: "sparkles"
         ),
