@@ -42,8 +42,7 @@ struct DivinationResultPageView: View {
     @State private var guidanceAdvice: String
     @State private var isLoading: Bool
     @State private var showSaveAlert = false
-    @State private var showFollowUpChat = false
-    @State private var followUpEntryMode: FollowUpEntryMode = .fromIcon
+    @State private var followUpLaunch: FollowUpLaunch?
     @State private var aiFollowUpSuggestions: [String]
     @State private var oneSentenceConclusion: String
     @State private var persistedRecord: DivinationRecord?
@@ -52,6 +51,12 @@ struct DivinationResultPageView: View {
     @State private var saveAlertTitle = "保存成功"
     @State private var saveAlertMessage = "分析结果已保存到历史记录中"
     @State private var showDeductionPrep = false
+    @State private var showDeductionStore = false
+    @State private var showMasterRegenConfirm = false
+    @State private var showMasterCheckout = false
+    @State private var showDailyLimit = false
+    @State private var showHistoryLimit = false
+    @ObservedObject private var permissionManager = PermissionManager.shared
     @State private var showShareExport = false
     @State private var shareActionTaken: ShareActionTaken = .none
     @State private var divinationTime: Date
@@ -244,8 +249,7 @@ struct DivinationResultPageView: View {
         if persistedFollowUpSession == nil, let record = persistedRecord {
             persistedFollowUpSession = dataService.fetchFollowUpSession(for: record)
         }
-        followUpEntryMode = mode
-        showFollowUpChat = true
+        followUpLaunch = FollowUpLaunch(mode: mode)
     }
     
     var body: some View {
@@ -294,20 +298,65 @@ struct DivinationResultPageView: View {
         .alert(saveAlertTitle, isPresented: $showSaveAlert) {
             Button("确定", role: .cancel) { }
         } message: {
-            Text(saveAlertMessage)
+            if !saveAlertMessage.isEmpty {
+                Text(saveAlertMessage)
+            }
         }
-        .fullScreenCover(isPresented: $showFollowUpChat) {
+        .fullScreenCover(item: $followUpLaunch) { launch in
             FollowUpChatView(
-                entryMode: followUpEntryMode,
+                entryMode: launch.mode,
                 hexagramContext: followUpContext,
                 existingSession: pendingNewArchive ? nil : persistedFollowUpSession,
-                linkedRecord: pendingNewArchive ? nil : persistedRecord,
+                linkedRecord: currentArchiveRecord,
+                archiveDraft: archiveDraft,
+                onArchiveCreated: adoptArchive,
                 onDismiss: { session in
                     if let session { persistedFollowUpSession = session }
-                    showFollowUpChat = false
+                    followUpLaunch = nil
                 },
-                onViewFullInterpretation: { showFollowUpChat = false }
+                onViewFullInterpretation: { followUpLaunch = nil }
             )
+        }
+        .alert("重新生成将消耗 1 次大师点券", isPresented: $showMasterRegenConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确认，消耗1次") {
+                guard permissionManager.consumeMasterCredit(readingID: quotaReadingID) else {
+                    showMasterCheckout = true
+                    return
+                }
+                retryInterpretation()
+            }
+        } message: {
+            Text("本次重新生成后，原有解读将被覆盖。确认重新生成？")
+        }
+        .sheet(isPresented: $showDailyLimit) {
+            LimitReachedView(
+                limitType: .dailyDivination,
+                remaining: permissionManager.getDailyDivinationRemaining(),
+                resetTime: Calendar.current.date(byAdding: .day, value: 1, to: Date())
+            )
+        }
+        .sheet(isPresented: $showHistoryLimit) {
+            LimitReachedView(
+                limitType: .historyRecords,
+                remaining: 0,
+                resetTime: nil
+            )
+        }
+        .sheet(isPresented: $showDeductionStore) {
+            DeductionCouponView(hasMasterReading: interpretationMode == .master)
+        }
+        .overlay {
+            if showMasterCheckout {
+                MasterReadingCheckoutView(onClose: {
+                    showMasterCheckout = false
+                }, onPurchased: {
+                    showMasterCheckout = false
+                    if permissionManager.consumeMasterCredit(readingID: quotaReadingID) {
+                        retryInterpretation()
+                    }
+                })
+            }
         }
         .fullScreenCover(isPresented: $showDeductionPrep) {
             DeductionPrepView(
@@ -316,7 +365,9 @@ struct DivinationResultPageView: View {
                 liuYaoChart: liuYaoChart,
                 castTime: castTime,
                 aiInterpretation: aiInterpretation,
-                sourceRecord: persistedRecord,
+                sourceRecord: currentArchiveRecord,
+                archiveDraft: archiveDraft,
+                onArchiveCreated: adoptArchive,
                 onDismiss: { showDeductionPrep = false },
                 onViewOriginal: { showDeductionPrep = false }
             )
@@ -741,7 +792,7 @@ struct DivinationResultPageView: View {
                     .multilineTextAlignment(.center)
                 
                 Button("重新解读") {
-                    retryInterpretation()
+                    handleRetryTapped()
                 }
                 .font(.body)
                 .foregroundColor(.white)
@@ -809,12 +860,12 @@ struct DivinationResultPageView: View {
     private func bottomActionRow(shareTitle: String?) -> some View {
         HStack(spacing: 6) {
             outlineActionButton(icon: "bookmark", title: "保存", action: saveResult)
-            outlineActionButton(icon: "arrow.triangle.2.circlepath", title: "重解", action: retryInterpretation)
+            outlineActionButton(icon: "arrow.triangle.2.circlepath", title: "重解", action: handleRetryTapped)
             outlineActionButton(icon: "square.and.arrow.up", title: shareTitle, action: openShareExport)
             
             Spacer(minLength: 8)
             
-            Button(action: { showDeductionPrep = true }) {
+            Button(action: openDeduction) {
                 HStack(spacing: 6) {
                     Text("推演事件趋势")
                     Image(systemName: "arrow.right")
@@ -878,6 +929,35 @@ struct DivinationResultPageView: View {
             )
     }
     
+    private var quotaReadingID: String {
+        PermissionManager.readingID(
+            question: question,
+            castTime: castTime,
+            hexagramName: hexagramData.name
+        )
+    }
+
+    private func openDeduction() {
+        if permissionManager.usageStats.deductionCredits > 0 {
+            showDeductionPrep = true
+        } else {
+            showDeductionStore = true
+        }
+    }
+
+    private func handleRetryTapped() {
+        if professionalReadingBlocked() { return }
+        guard interpretationMode == .master, didRecordSuccess else {
+            retryInterpretation()
+            return
+        }
+        if permissionManager.totalMasterCredits() > 0 {
+            showMasterRegenConfirm = true
+        } else {
+            showMasterCheckout = true
+        }
+    }
+
     private func retryInterpretation() {
         print("[DivinationResultPageView] 点击重新解读")
         pendingNewArchive = true
@@ -968,7 +1048,17 @@ struct DivinationResultPageView: View {
     }
 
     // MARK: - 私有方法
+    /// 免费用户当日专业解读已用完时，不再发起新的专业解读。
+    private func professionalReadingBlocked() -> Bool {
+        guard interpretationMode == .professional else { return false }
+        guard !permissionManager.canUseDivination() else { return false }
+        isLoading = false
+        showDailyLimit = true
+        return true
+    }
+
     private func requestAIInterpretation() {
+        if professionalReadingBlocked() { return }
         print("[DivinationResultPageView] 开始请求AI解读")
         currentFailure = nil
         didRecordSuccess = false
@@ -1036,6 +1126,9 @@ struct DivinationResultPageView: View {
         guard !didRecordSuccess else { return }
         didRecordSuccess = true
         PermissionManager.shared.incrementDivinationCount()
+        if interpretationMode == .professional {
+            PermissionManager.shared.recordProfessionalReadingUse()
+        }
         AnalyticsManager.shared.incrementDivinationCount()
         let waitMs = Int(Date().timeIntervalSince(aiRequestStartedAt ?? castTime) * 1000)
         let usageStats = UserDefaults.standard.usageStatistics
@@ -1061,15 +1154,13 @@ struct DivinationResultPageView: View {
         )
     }
     
-    private func saveResult() {
-        if persistedRecord != nil && !pendingNewArchive {
-            saveAlertTitle = "已在历史中"
-            saveAlertMessage = "重新解读并点保存后，会另外生成一条新记录。"
-            showSaveAlert = true
-            return
-        }
-        let wasRetry = pendingNewArchive && persistedRecord != nil
-        let saved = dataService.saveDivinationRecord(
+    /// 重解之后，当前页还没另存，不能把推演或追问写回旧记录。
+    private var currentArchiveRecord: DivinationRecord? {
+        pendingNewArchive ? nil : persistedRecord
+    }
+
+    private var archiveDraft: DivinationArchiveDraft {
+        DivinationArchiveDraft(
             question: question,
             tossResults: tossResults,
             aiInterpretation: aiInterpretation,
@@ -1084,16 +1175,37 @@ struct DivinationResultPageView: View {
             oneSentenceConclusion: resolvedConclusion,
             followUpSuggestions: displaySuggestions
         )
-        if let saved {
-            if let session = persistedFollowUpSession, session.divinationRecord == nil {
-                dataService.attach(session, to: saved)
-            }
-            persistedRecord = saved
-            pendingNewArchive = false
+    }
+
+    private func adoptArchive(_ record: DivinationRecord) {
+        if let session = persistedFollowUpSession, session.divinationRecord == nil {
+            dataService.attach(session, to: record)
+        }
+        persistedRecord = record
+        pendingNewArchive = false
+    }
+
+    private func saveResult() {
+        if persistedRecord != nil && !pendingNewArchive {
+            saveAlertTitle = "已在历史中"
+            saveAlertMessage = ""
+            showSaveAlert = true
+            return
+        }
+        if !permissionManager.canSaveMoreRecords() {
+            showHistoryLimit = true
+            return
+        }
+        let wasRetry = pendingNewArchive && persistedRecord != nil
+        if let saved = dataService.ensureDivinationArchive(existing: nil, draft: archiveDraft) {
+            adoptArchive(saved)
             saveAlertTitle = "保存成功"
             saveAlertMessage = wasRetry
                 ? "已另存为一条新的历史记录，原来的记录仍保留。"
                 : "分析结果已保存到历史记录中"
+        } else if !permissionManager.canSaveMoreRecords() {
+            showHistoryLimit = true
+            return
         } else {
             saveAlertTitle = "保存失败"
             saveAlertMessage = "这次没有写入历史记录，请再试一次。"
@@ -1501,7 +1613,7 @@ struct TextSegment {
 }
 
 // MARK: - 问题卡整张背景
-private struct ResultQuestionBannerBackground: View {
+struct ResultQuestionBannerBackground: View {
     var body: some View {
         GeometryReader { geo in
             let imageRatio: CGFloat = 1224.0 / 336.0
@@ -1516,42 +1628,25 @@ private struct ResultQuestionBannerBackground: View {
     }
 }
 
+private struct FollowUpLaunch: Identifiable {
+    let id = UUID()
+    let mode: FollowUpEntryMode
+}
+
 // MARK: - 追问入口（悬浮在内容区右下角，暂不接逻辑）
 private struct FollowUpEntryView: View {
     var action: () -> Void = {}
-    
-    /// 圆形头像显示尺寸。换底图时导出 216×216 像素的正方形，资源名 FollowUpAvatar。
-    private let avatarSize: CGFloat = 72
-    
+
     var body: some View {
         Button(action: action) {
-            ZStack(alignment: .bottomTrailing) {
-                avatar
-                    .frame(width: avatarSize, height: avatarSize)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white, lineWidth: 3))
-                    .shadow(color: ResultTheme.primary.opacity(0.28), radius: 8, y: 3)
-                
-                ZStack {
-                    Circle()
-                        .fill(ResultTheme.primary)
-                    HStack(spacing: 2.5) {
-                        Circle().frame(width: 3.5, height: 3.5)
-                        Circle().frame(width: 3.5, height: 3.5)
-                    }
-                    .foregroundColor(.white)
-                }
-                .frame(width: 26, height: 26)
-                .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                .offset(x: 2, y: 2)
-            }
+            Image("FollowUpEntryIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 92, height: 82)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("追问")
-    }
-    
-    private var avatar: some View {
-        FollowUpAvatarView()
     }
 }
 
@@ -1594,7 +1689,7 @@ private struct FollowUpCoachCard: View {
                     .shadow(color: ResultTheme.primary.opacity(0.18), radius: 4, y: 2)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("追问教练")
+                    Text("继续追问")
                         .font(.headline)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
@@ -1625,6 +1720,8 @@ private struct FollowUpCoachCard: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 13)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Capsule(style: .continuous))
                         .overlay(
                             Capsule(style: .continuous)
                                 .stroke(ResultTheme.primary.opacity(0.35), lineWidth: 1)

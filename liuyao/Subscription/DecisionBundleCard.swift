@@ -4,13 +4,24 @@ import SwiftUI
 // 大师解读、推演两个购买页共用。购买按钮后续再接。
 
 struct DecisionBundleCard: View {
+    var deductionOnly: Bool = false
+    var onPurchased: (() -> Void)? = nil
+
+    @StateObject private var subscriptionService = SubscriptionService.shared
+    @State private var purchaseError: String?
+
     private let buyColor = Color(red: 148.0 / 255, green: 79.0 / 255, blue: 230.0 / 255)
 
-    private let includes = [
-        "大师解读 × 1（15 段深度报告）",
-        "推演解读 × 1（三路推演报告）",
-        "无限追问（本卦内）"
-    ]
+    private var includes: [String] {
+        if deductionOnly {
+            return ["推演解读 × 1（三路推演报告）"]
+        }
+        return [
+            "大师解读 × 1（15 段深度报告）",
+            "推演解读 × 1（三路推演报告）",
+            "每卦可追问 66次"
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -18,7 +29,7 @@ struct DecisionBundleCard: View {
                 Image(systemName: "gift.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(buyColor)
-                Text("决策套餐（大师 + 推演）")
+                Text(deductionOnly ? "仅推演" : "决策套餐（大师 + 推演）")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(ProfilePalette.ink)
                     .lineLimit(1)
@@ -32,7 +43,7 @@ struct DecisionBundleCard: View {
                 Spacer(minLength: 0)
             }
 
-            Text("大师报告 + 三路推演 + 无限追问（本卦内）")
+            Text(deductionOnly ? "本卦已有大师解读，本次仅购买推演" : "大师报告 + 三路推演 + 每卦 66次追问")
                 .font(.system(size: 13))
                 .foregroundColor(ProfilePalette.muted)
                 .lineLimit(1)
@@ -40,7 +51,7 @@ struct DecisionBundleCard: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("决策套餐 × 1")
+                    Text(deductionOnly ? "推演 × 1" : "决策套餐 × 1")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(ProfilePalette.ink)
                         .lineLimit(1)
@@ -66,16 +77,20 @@ struct DecisionBundleCard: View {
                     .font(.system(size: 13))
                     .foregroundColor(ProfilePalette.muted)
                 HStack {
-                    Text("¥18")
+                    Text(deductionOnly ? "¥8" : "¥18")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(buyColor)
                     Spacer()
                     Button {
-                        // 套餐购买后续再接
+                        purchase()
                     } label: {
                         Text("购买")
                     }
-                    .buttonStyle(AccentBuyButtonStyle(compact: false))
+                    .buttonStyle(AccentBuyButtonStyle(
+                        compact: false,
+                        isLoading: subscriptionService.purchasingProductID == productID
+                    ))
+                    .disabled(subscriptionService.isPurchasing)
                 }
             }
             .padding(14)
@@ -117,14 +132,49 @@ struct DecisionBundleCard: View {
                 .fill(Color.white.opacity(0.92))
                 .shadow(color: ProfilePalette.cardShadow, radius: 10, y: 4)
         )
+        .alert("购买未完成", isPresented: Binding(
+            get: { purchaseError != nil },
+            set: { if !$0 { purchaseError = nil } }
+        )) {
+            Button("确定", role: .cancel) { purchaseError = nil }
+        } message: {
+            Text(purchaseError ?? "")
+        }
+    }
+
+    private var productID: String {
+        deductionOnly ? SubscriptionConfig.deduction1ProductID : SubscriptionConfig.bundleProductID
+    }
+
+    private func purchase() {
+        Task {
+            do {
+                let ok = try await subscriptionService.purchaseConsumable(productID)
+                if ok {
+                    onPurchased?()
+                } else if let message = subscriptionService.purchaseError, !message.isEmpty {
+                    purchaseError = message
+                }
+            } catch {
+                purchaseError = error.localizedDescription
+            }
+        }
     }
 }
 
 struct AccentBuyButtonStyle: ButtonStyle {
     var compact: Bool = false
+    var isLoading: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        ZStack {
+            configuration.label.opacity(isLoading ? 0 : 1)
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.white)
+            }
+        }
             .font(.system(size: compact ? 14 : 15, weight: .bold))
             .foregroundColor(.white)
             .frame(width: compact ? 72 : 96, height: compact ? 34 : 40)

@@ -1,7 +1,6 @@
 import SwiftUI
 
-// MARK: - 升级专业版（设计稿假数据）
-// 购买、点券、会员特权入口后续再接到 SubscriptionService。本页不替换 SubscriptionDetailView / SubscriptionManagementView。
+// MARK: - 升级专业版
 
 private enum ProUpgradePlan: String, CaseIterable {
     case monthly
@@ -17,7 +16,7 @@ private enum ProUpgradePlan: String, CaseIterable {
     var price: String {
         switch self {
         case .monthly: return "¥9.9"
-        case .yearly: return "¥68"
+        case .yearly: return "¥99"
         }
     }
 
@@ -31,14 +30,29 @@ private enum ProUpgradePlan: String, CaseIterable {
     var buttonPrice: String {
         switch self {
         case .monthly: return "¥9.90 /月"
-        case .yearly: return "¥68.00 /年"
+        case .yearly: return "¥99.00 /年"
         }
     }
 }
 
 struct ProUpgradeView: View {
+    var prefersYearly: Bool = true
+    var onPurchased: (() -> Void)? = nil
+
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var permissionManager = PermissionManager.shared
+    @StateObject private var subscriptionService = SubscriptionService.shared
     @State private var selectedPlan: ProUpgradePlan = .yearly
+    @State private var purchaseError: String?
+    @State private var showMasterDetail = false
+    @State private var showDeductionDetail = false
+    @State private var isStartingPlanPurchase = false
+
+    init(prefersYearly: Bool = true, onPurchased: (() -> Void)? = nil) {
+        self.prefersYearly = prefersYearly
+        self.onPurchased = onPurchased
+        _selectedPlan = State(initialValue: prefersYearly ? .yearly : .monthly)
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -62,6 +76,20 @@ struct ProUpgradeView: View {
         .profileHidesTopScrollEdge()
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .alert("购买未完成", isPresented: Binding(
+            get: { purchaseError != nil },
+            set: { if !$0 { purchaseError = nil } }
+        )) {
+            Button("确定", role: .cancel) { purchaseError = nil }
+        } message: {
+            Text(purchaseError ?? "")
+        }
+        .fullScreenCover(isPresented: $showMasterDetail) {
+            MasterReadingDetailView()
+        }
+        .fullScreenCover(isPresented: $showDeductionDetail) {
+            DeductionCouponView()
+        }
     }
 
     private var topInset: CGFloat {
@@ -118,14 +146,6 @@ struct ProUpgradeView: View {
                         .frame(width: 36, height: 36)
                 }
                 Spacer()
-                // 会员特权入口后续再接
-                HStack(spacing: 4) {
-                    Image(systemName: "crown.fill")
-                        .font(.system(size: 11))
-                    Text("会员特权")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundColor(ProfilePalette.accent)
             }
         }
         .padding(.horizontal, 12)
@@ -154,10 +174,10 @@ struct ProUpgradeView: View {
                 Text("当前状态")
                     .font(.system(size: 12))
                     .foregroundColor(ProfilePalette.muted)
-                Text("免费用户")
+                Text(statusTitle)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(ProfilePalette.ink)
-                Text("体验基础功能，开启人生探索之旅")
+                Text(statusSubtitle)
                     .font(.system(size: 12))
                     .foregroundColor(ProfilePalette.muted)
                     .lineLimit(2)
@@ -260,10 +280,10 @@ struct ProUpgradeView: View {
                         .foregroundColor(selected ? Color(red: 0.72, green: 0.42, blue: 0.12) : ProfilePalette.faint)
                 }
                 if plan == .yearly {
-                    Text("立省¥52.8")
+                    Text("立省¥19.8")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color(red: 0.85, green: 0.35, blue: 0.22))
-                    Text("≈¥5.67/月")
+                    Text("≈¥8.25/月")
                         .font(.system(size: 11))
                         .foregroundColor(ProfilePalette.faint)
                 } else {
@@ -314,10 +334,14 @@ struct ProUpgradeView: View {
 
     private var benefitRow: some View {
         HStack(spacing: 0) {
-            benefitItem(icon: "infinity", title: "无限专业解读", subtitle: "不受次数限制")
-            benefitItem(icon: "bubble.left.and.bubble.right.fill", title: "无限提问", subtitle: "深度探索问题")
+            benefitItem(icon: "infinity", title: "月66次/年88次", subtitle: "专业解读")
+            benefitItem(icon: "bubble.left.and.bubble.right.fill", title: "66次追问", subtitle: "每卦深度追问")
             benefitItem(icon: "bookmark.fill", title: "无限保存", subtitle: "珍贵内容不丢失")
-            benefitItem(icon: "circle.lefthalf.filled", title: "每月1次", subtitle: "大师解读")
+            benefitItem(
+                icon: "circle.lefthalf.filled",
+                title: selectedPlan == .yearly ? "每月2次" : "每月1次",
+                subtitle: "大师解读"
+            )
         }
     }
 
@@ -344,15 +368,32 @@ struct ProUpgradeView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var selectedProductID: String {
+        selectedPlan == .monthly
+            ? SubscriptionConfig.proMonthlyProductID
+            : SubscriptionConfig.proYearlyProductID
+    }
+
+    private var upgradeButtonBusy: Bool {
+        isStartingPlanPurchase || subscriptionService.purchasingProductID == selectedProductID
+    }
+
     private var upgradeButton: some View {
         Button {
-            // 购买后续接到 SubscriptionService.purchase
+            purchaseSelectedPlan()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("升级到专业版  \(selectedPlan.buttonPrice)")
-                    .font(.system(size: 16, weight: .bold))
+            Group {
+                if upgradeButtonBusy {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("升级到专业版  \(selectedPlan.buttonPrice)")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                }
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
@@ -371,6 +412,7 @@ struct ProUpgradeView: View {
             .shadow(color: Color(red: 0.95, green: 0.40, blue: 0.28).opacity(0.45), radius: 8, y: 4)
         }
         .buttonStyle(.plain)
+        .disabled(upgradeButtonBusy || subscriptionService.isPurchasing)
     }
 
     private var proCardBackground: some View {
@@ -406,7 +448,9 @@ struct ProUpgradeView: View {
 
     private var couponSection: some View {
         VStack(spacing: 10) {
-            NavigationLink(destination: MasterReadingDetailView()) {
+            Button {
+                showMasterDetail = true
+            } label: {
                 couponRowLabel(
                     icon: "star.fill",
                     colors: [Color(red: 0.62, green: 0.48, blue: 0.98), ProfilePalette.accent],
@@ -417,7 +461,9 @@ struct ProUpgradeView: View {
                 )
             }
             .buttonStyle(.plain)
-            NavigationLink(destination: DeductionCouponView()) {
+            Button {
+                showDeductionDetail = true
+            } label: {
                 couponRowLabel(
                     icon: "point.3.connected.trianglepath.dotted",
                     colors: [Color(red: 184.0 / 255, green: 75.0 / 255, blue: 231.0 / 255), Color(red: 150.0 / 255, green: 42.0 / 255, blue: 198.0 / 255)],
@@ -432,7 +478,7 @@ struct ProUpgradeView: View {
                 icon: "gift.fill",
                 colors: [Color(red: 0.96, green: 0.45, blue: 0.62), Color(red: 0.90, green: 0.32, blue: 0.55)],
                 title: "套餐",
-                subtitle: "一次性套装 + 大师解读 + 三路推演 + 无限追问（本卦内）",
+                subtitle: "大师解读 + 三路推演 + 每卦 66次追问",
                 price: "¥18",
                 unit: ""
             )
@@ -444,7 +490,7 @@ struct ProUpgradeView: View {
 
     private func couponRow(icon: String, colors: [Color], title: String, subtitle: String, price: String, unit: String) -> some View {
         Button {
-            // 点券购买入口后续再接
+            Task { await purchaseProduct(SubscriptionConfig.bundleProductID) }
         } label: {
             couponRowLabel(icon: icon, colors: colors, title: title, subtitle: subtitle, price: price, unit: unit)
         }
@@ -586,12 +632,85 @@ struct ProUpgradeView: View {
 
     private var compareRows: [ProCompareRow] {
         [
-            .init(icon: "sparkles", name: "专业解读", free: "1次/天", member: "无限", ticket: "按需购买"),
+            .init(icon: "sparkles", name: "专业解读", free: "1次/天", member: "66/88次", ticket: "按需购买"),
             .init(icon: "clock.arrow.circlepath", name: "历史保存", free: "3条", member: "无限", ticket: "按需购买"),
-            .init(icon: "bubble.left.fill", name: "提问次数", free: "3轮", member: "无限", ticket: "大师点券可用"),
-            .init(icon: "star.fill", name: "大师解读", free: "—", member: "每月1次", ticket: "1次权益"),
-            .init(icon: "point.3.connected.trianglepath.dotted", name: "三路推演", free: "—", member: "每月1次", ticket: "1次权益")
+            .init(icon: "bubble.left.fill", name: "提问次数", free: "3轮", member: "66次/卦", ticket: "大师点券可用"),
+            .init(icon: "star.fill", name: "大师解读", free: "—", member: "1-2次/月", ticket: "¥12/次"),
+            .init(icon: "point.3.connected.trianglepath.dotted", name: "三路推演", free: "—", member: "—", ticket: "¥8/次")
         ]
+    }
+
+    private var statusTitle: String {
+        switch permissionManager.currentTier {
+        case .free: return "免费用户"
+        case .proMonthly: return "月度会员"
+        case .proYearly: return "年度会员"
+        }
+    }
+
+    private var statusSubtitle: String {
+        switch permissionManager.currentTier {
+        case .free:
+            return "体验基础功能，开启人生探索之旅"
+        case .proMonthly:
+            return "每月 66次专业解读 · 每月赠 1次大师解读"
+        case .proYearly:
+            return "每月 88次专业解读 · 每月赠 2次大师解读"
+        }
+    }
+
+    private func purchaseSelectedPlan() {
+        guard !subscriptionService.isPurchasing, !isStartingPlanPurchase else { return }
+        isStartingPlanPurchase = true
+        let productID = selectedProductID
+        Task {
+            defer { isStartingPlanPurchase = false }
+            let succeeded = await purchaseProduct(productID, consumable: false)
+            if succeeded { finishPurchase() }
+        }
+    }
+
+    private func finishPurchase() {
+        if let onPurchased {
+            onPurchased()
+            return
+        }
+        ToastManager.shared.showPurchaseSuccess {
+            dismiss()
+        }
+    }
+
+    @discardableResult
+    private func purchaseProduct(_ productID: String, consumable: Bool = true) async -> Bool {
+        do {
+            if consumable {
+                let ok = try await subscriptionService.purchaseConsumable(productID)
+                if ok {
+                    finishPurchase()
+                } else if let message = subscriptionService.purchaseError, !message.isEmpty {
+                    purchaseError = message
+                }
+                return ok
+            }
+            if subscriptionService.products.first(where: { $0.id == productID }) == nil {
+                await subscriptionService.loadProducts()
+            }
+            guard let product = subscriptionService.products.first(where: { $0.id == productID }) else {
+                purchaseError = "商品暂不可用，请稍后重试"
+                return false
+            }
+            let transaction = try await subscriptionService.purchase(product)
+            if transaction == nil {
+                if let message = subscriptionService.purchaseError, !message.isEmpty {
+                    purchaseError = message
+                }
+                return false
+            }
+            return true
+        } catch {
+            purchaseError = error.localizedDescription
+            return false
+        }
     }
 }
 

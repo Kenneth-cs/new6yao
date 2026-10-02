@@ -44,7 +44,7 @@ class PermissionManager: ObservableObject {
         $currentTier
             .sink { [weak self] tier in
                 self?.updateQuota(for: tier)
-                self?.saveSubscriptionStatus()
+                self?.saveSubscriptionStatus(tier: tier)
             }
             .store(in: &cancellables)
     }
@@ -96,10 +96,20 @@ class PermissionManager: ObservableObject {
         return usageStats.monthlyMatrixCount < usageQuota.monthlyMatrixLimit
     }
     
-    /// 是否可以保存更多历史记录
+    /// 是否可以保存更多历史记录。按实际存档条数判断，避免本地计数一直是 0。
     func canSaveMoreRecords() -> Bool {
         if currentTier.isPro { return true }
-        return usageStats.totalHistoryRecords < usageQuota.historyRecordsLimit
+        syncHistoryRecordCount()
+        let limit = usageQuota.historyRecordsLimit
+        if limit < 0 { return true }
+        return usageStats.totalHistoryRecords < limit
+    }
+
+    func syncHistoryRecordCount() {
+        let count = DataService().fetchAllRecords().count
+        guard usageStats.totalHistoryRecords != count else { return }
+        usageStats.totalHistoryRecords = count
+        saveUsageStatistics()
     }
 
     /// 是否可以使用五行决策（每日限额）
@@ -230,6 +240,9 @@ class PermissionManager: ObservableObject {
     /// 获取剩余次数的描述文本
     func getRemainingText(for feature: FeaturePermission) -> String {
         if currentTier.isPro {
+            if feature == .divination {
+                return "本月还剩 \(monthlyReadingRemaining()) 次专业解读"
+            }
             return "无限次数"
         }
         
@@ -258,6 +271,9 @@ class PermissionManager: ObservableObject {
     /// 更新订阅层级
     func updateSubscriptionTier(_ tier: SubscriptionTier) {
         print("🔄 更新订阅层级：\(currentTier.displayName) → \(tier.displayName)")
+        if tier == .free {
+            subscriptionStatus = nil
+        }
         currentTier = tier
         updateQuota(for: tier)
     }
@@ -291,6 +307,7 @@ class PermissionManager: ObservableObject {
             print("🔄 重置每月计数器")
             usageStats.resetMonthly()
             saveUsageStatistics()
+            pushQuotaToCloud()
         }
     }
     
@@ -335,16 +352,18 @@ class PermissionManager: ObservableObject {
     
     // MARK: - 数据持久化
     
-    /// 保存订阅状态
-    private func saveSubscriptionStatus() {
-        userDefaults.set(currentTier.rawValue, forKey: SubscriptionConfig.UserDefaultsKeys.subscriptionTier)
+    /// 保存订阅状态。必须用传入的新层级：`@Published` 在属性写完前就通知，此时 `currentTier` 还是旧值。
+    private func saveSubscriptionStatus(tier: SubscriptionTier) {
+        userDefaults.set(tier.rawValue, forKey: SubscriptionConfig.UserDefaultsKeys.subscriptionTier)
         
-        if let status = subscriptionStatus,
+        if let status = subscriptionStatus, status.tier == tier,
            let encoded = try? JSONEncoder().encode(status) {
             userDefaults.set(encoded, forKey: SubscriptionConfig.UserDefaultsKeys.subscriptionStatus)
+        } else {
+            userDefaults.removeObject(forKey: SubscriptionConfig.UserDefaultsKeys.subscriptionStatus)
         }
         
-        print("💾 订阅状态已保存：\(currentTier.displayName)")
+        print("💾 订阅状态已保存：\(tier.displayName)")
     }
     
     /// 加载订阅状态
@@ -422,26 +441,286 @@ class PermissionManager: ObservableObject {
     
     // MARK: - 开发者模式辅助方法
 
-    /// 重置所有使用计数为 0（开发者调试用）
-    func devResetAllCounts() {
-        usageStats.dailyDivinationCount   = 0
-        usageStats.monthlySWOTCount       = 0
-        usageStats.monthlyMatrixCount     = 0
-        usageStats.dailyFiveElementCount  = 0
+    private static let devQuotaStampKey = "dev_quota_stamp"
+
+    /// 开发者改完本地配额后打上时间戳再上传。比这个时间旧的云端记录不能盖回来。
+    private func devCommit(_ change: () -> Void) {
+        userDefaults.set(Date(), forKey: Self.devQuotaStampKey)
+        change()
         saveUsageStatistics()
         objectWillChange.send()
-        print("🔧 [Dev] 已重置所有使用计数")
+        pushQuotaToCloud()
     }
 
-    /// 把所有计数推满（模拟用尽所有次数）
-    func devFillAllCounts() {
-        usageStats.dailyDivinationCount   = usageQuota.dailyDivinationLimit
-        usageStats.monthlySWOTCount       = usageQuota.monthlySWOTLimit
-        usageStats.monthlyMatrixCount     = usageQuota.monthlyMatrixLimit
-        usageStats.dailyFiveElementCount  = usageQuota.dailyFiveElementLimit
+    /// 恢复本月专业解读和大师赠送。已购次数不动。恢复后不会出现拦截。
+    func devRestoreMonthlyQuota() {
+        devCommit {
+            usageStats.monthlyReadingUsed = 0
+            usageStats.monthlyMasterGiftUsed = 0
+            usageStats.dailyDivinationCount = 0
+        }
+        print("🔧 [Dev] 已恢复本月额度")
+    }
+
+    /// 把专业解读用满，用来测月度拦截。
+    func devExhaustProfessionalReading() {
+        devCommit {
+            if currentTier.isPro {
+                let limit = usageQuota.monthlyReadingLimit
+                usageStats.monthlyReadingUsed = limit > 0 ? limit : 0
+            } else if usageQuota.dailyDivinationLimit > 0 {
+                usageStats.dailyDivinationCount = usageQuota.dailyDivinationLimit
+                usageStats.lifetimeSuccessfulDivinationCount = max(usageStats.lifetimeSuccessfulDivinationCount, 1)
+            }
+        }
+        print("🔧 [Dev] 已用尽专业解读")
+    }
+
+    /// 大师赠送和已购大师次数都清掉。
+    func devClearMasterAccess() {
+        devCommit {
+            if usageQuota.monthlyMasterGift > 0 {
+                usageStats.monthlyMasterGiftUsed = usageQuota.monthlyMasterGift
+            }
+            usageStats.masterCredits = 0
+        }
+        print("🔧 [Dev] 已清空大师赠送和已购大师")
+    }
+
+    /// 已购推演次数清掉。
+    func devClearDeductionCredits() {
+        devCommit {
+            usageStats.deductionCredits = 0
+        }
+        print("🔧 [Dev] 已清空已购推演")
+    }
+
+    /// 专业解读、大师赠送、已购大师、已购推演一次用尽。
+    func devExhaustPaywall() {
+        devCommit {
+            let readingLimit = usageQuota.monthlyReadingLimit
+            usageStats.monthlyReadingUsed = readingLimit > 0 ? readingLimit : 0
+            if usageQuota.monthlyMasterGift > 0 {
+                usageStats.monthlyMasterGiftUsed = usageQuota.monthlyMasterGift
+            }
+            usageStats.masterCredits = 0
+            usageStats.deductionCredits = 0
+            if !currentTier.isPro, usageQuota.dailyDivinationLimit > 0 {
+                usageStats.dailyDivinationCount = usageQuota.dailyDivinationLimit
+                usageStats.lifetimeSuccessfulDivinationCount = max(usageStats.lifetimeSuccessfulDivinationCount, 1)
+            }
+        }
+        print("🔧 [Dev] 已用尽专业解读、大师和推演")
+    }
+
+    // MARK: - v3.3 配额
+
+    static func readingID(question: String, castTime: Date, hexagramName: String) -> String {
+        let trimmed = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(trimmed)|\(Int(castTime.timeIntervalSince1970))|\(hexagramName)"
+    }
+
+    func canUseProfessionalReading() -> Bool {
+        checkAndResetCounters()
+        guard currentTier.isPro else { return true }
+        let limit = usageQuota.monthlyReadingLimit
+        guard limit >= 0 else { return true }
+        return usageStats.monthlyReadingUsed < limit
+    }
+
+    func monthlyReadingRemaining() -> Int {
+        checkAndResetCounters()
+        guard currentTier.isPro else { return getDailyDivinationRemaining() }
+        let limit = usageQuota.monthlyReadingLimit
+        guard limit >= 0 else { return -1 }
+        return max(0, limit - usageStats.monthlyReadingUsed)
+    }
+
+    func daysUntilMonthlyReset() -> Int {
+        let calendar = Calendar.current
+        let now = Date()
+        guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: now),
+              let start = calendar.date(from: calendar.dateComponents([.year, .month], from: nextMonth)) else {
+            return 0
+        }
+        return max(0, calendar.dateComponents([.day], from: now, to: start).day ?? 0)
+    }
+
+    func recordProfessionalReadingUse() {
+        guard currentTier.isPro else { return }
+        checkAndResetCounters()
+        usageStats.monthlyReadingUsed += 1
+        saveUsageStatistics()
+        pushQuotaToCloud()
+    }
+
+    func followUpLimit(for readingID: String) -> Int {
+        if currentTier.isPro { return usageQuota.followUpLimit }
+        if usageStats.masterUnlockedReadingIDs.contains(readingID) {
+            return SubscriptionConfig.paidFollowUpLimit
+        }
+        return SubscriptionConfig.freeFollowUpLimit
+    }
+
+    func canSendFollowUp(readingID: String) -> Bool {
+        alignFollowUpReading(readingID)
+        return usageStats.followUpCountInCurrentReading < followUpLimit(for: readingID)
+    }
+
+    func followUpRemaining(readingID: String) -> Int {
+        alignFollowUpReading(readingID)
+        return max(0, followUpLimit(for: readingID) - usageStats.followUpCountInCurrentReading)
+    }
+
+    func adoptFollowUpCount(readingID: String, observedTurns: Int) {
+        alignFollowUpReading(readingID)
+        if observedTurns > usageStats.followUpCountInCurrentReading {
+            usageStats.followUpCountInCurrentReading = observedTurns
+            saveUsageStatistics()
+        }
+    }
+
+    func incrementFollowUp(readingID: String) {
+        alignFollowUpReading(readingID)
+        usageStats.followUpCountInCurrentReading += 1
+        saveUsageStatistics()
+    }
+
+    func monthlyMasterGiftRemaining() -> Int {
+        checkAndResetCounters()
+        return max(0, usageQuota.monthlyMasterGift - usageStats.monthlyMasterGiftUsed)
+    }
+
+    func totalMasterCredits() -> Int {
+        usageStats.masterCredits + monthlyMasterGiftRemaining()
+    }
+
+    @discardableResult
+    func consumeMasterCredit(readingID: String) -> Bool {
+        checkAndResetCounters()
+        if currentTier.isPro, usageStats.monthlyMasterGiftUsed < usageQuota.monthlyMasterGift {
+            usageStats.monthlyMasterGiftUsed += 1
+        } else if usageStats.masterCredits > 0 {
+            usageStats.masterCredits -= 1
+        } else {
+            return false
+        }
+        unlockMasterReading(readingID)
+        saveUsageStatistics()
+        pushQuotaToCloud()
+        return true
+    }
+
+    @discardableResult
+    func consumeDeductionCredit() -> Bool {
+        guard usageStats.deductionCredits > 0 else { return false }
+        usageStats.deductionCredits -= 1
+        saveUsageStatistics()
+        pushQuotaToCloud()
+        return true
+    }
+
+    func refundDeductionCredit() {
+        usageStats.deductionCredits += 1
+        saveUsageStatistics()
+        pushQuotaToCloud()
+    }
+
+    func addMasterCredits(_ count: Int, sync: Bool = true) {
+        guard count > 0 else { return }
+        usageStats.masterCredits += count
+        saveUsageStatistics()
+        if sync { pushQuotaToCloud() }
+    }
+
+    func addDeductionCredits(_ count: Int, sync: Bool = true) {
+        guard count > 0 else { return }
+        usageStats.deductionCredits += count
+        saveUsageStatistics()
+        if sync { pushQuotaToCloud() }
+    }
+
+    func pushQuotaToCloud() {
+        let snapshot = cloudSnapshot()
+        Task { @MainActor in
+            await CloudKitSyncManager.shared.saveQuota(snapshot)
+        }
+    }
+
+    func cloudSnapshot() -> CloudQuotaSnapshot {
+        CloudQuotaSnapshot(
+            masterCredits: usageStats.masterCredits,
+            deductionCredits: usageStats.deductionCredits,
+            monthlyReadingUsed: usageStats.monthlyReadingUsed,
+            monthlyMasterGiftUsed: usageStats.monthlyMasterGiftUsed,
+            monthlyResetDate: usageStats.lastMonthlyResetDate,
+            masterUnlockedReadingIDs: usageStats.masterUnlockedReadingIDs
+        )
+    }
+
+    /// 与云端合并。余额和同月已用次数取较大值，避免后写入的设备把已购点券盖掉。
+    /// 开发者模式刚改过本地时，以本地为准回写，避免云端把测试值盖回来。
+    /// 返回 true 表示本地结果比云端更新，需要回写。
+    @discardableResult
+    func mergeCloudSnapshot(_ remote: CloudQuotaSnapshot) -> Bool {
+        if let stamp = userDefaults.object(forKey: Self.devQuotaStampKey) as? Date,
+           remote.lastUpdatedAt < stamp {
+            return true
+        }
+        checkAndResetCounters()
+        let localMaster = usageStats.masterCredits
+        let localDeduction = usageStats.deductionCredits
+        let localReading = usageStats.monthlyReadingUsed
+        let localGift = usageStats.monthlyMasterGiftUsed
+        let localIDs = Set(usageStats.masterUnlockedReadingIDs)
+
+        usageStats.masterCredits = max(localMaster, remote.masterCredits)
+        usageStats.deductionCredits = max(localDeduction, remote.deductionCredits)
+
+        let calendar = Calendar.current
+        let localMonth = calendar.dateComponents([.year, .month], from: usageStats.lastMonthlyResetDate)
+        let remoteMonth = calendar.dateComponents([.year, .month], from: remote.monthlyResetDate)
+        let nowMonth = calendar.dateComponents([.year, .month], from: Date())
+        if localMonth.year == remoteMonth.year && localMonth.month == remoteMonth.month {
+            usageStats.monthlyReadingUsed = max(localReading, remote.monthlyReadingUsed)
+            usageStats.monthlyMasterGiftUsed = max(localGift, remote.monthlyMasterGiftUsed)
+        } else if remoteMonth.year == nowMonth.year && remoteMonth.month == nowMonth.month {
+            usageStats.monthlyReadingUsed = remote.monthlyReadingUsed
+            usageStats.monthlyMasterGiftUsed = remote.monthlyMasterGiftUsed
+            usageStats.lastMonthlyResetDate = remote.monthlyResetDate
+        }
+
+        var unlocked = localIDs.union(remote.masterUnlockedReadingIDs)
+        if unlocked.count > 40 {
+            unlocked = Set(Array(unlocked).suffix(40))
+        }
+        usageStats.masterUnlockedReadingIDs = Array(unlocked)
         saveUsageStatistics()
         objectWillChange.send()
-        print("🔧 [Dev] 已填满所有使用计数")
+
+        let changedCredits = usageStats.masterCredits != remote.masterCredits
+            || usageStats.deductionCredits != remote.deductionCredits
+        let changedUsage = usageStats.monthlyReadingUsed != remote.monthlyReadingUsed
+            || usageStats.monthlyMasterGiftUsed != remote.monthlyMasterGiftUsed
+        let changedIDs = Set(usageStats.masterUnlockedReadingIDs) != Set(remote.masterUnlockedReadingIDs)
+        return changedCredits || changedUsage || changedIDs
+    }
+
+    private func alignFollowUpReading(_ readingID: String) {
+        guard usageStats.currentReadingID != readingID else { return }
+        usageStats.currentReadingID = readingID
+        usageStats.followUpCountInCurrentReading = 0
+        saveUsageStatistics()
+    }
+
+    private func unlockMasterReading(_ readingID: String) {
+        guard !readingID.isEmpty else { return }
+        var ids = usageStats.masterUnlockedReadingIDs.filter { $0 != readingID }
+        ids.append(readingID)
+        if ids.count > 40 {
+            ids.removeFirst(ids.count - 40)
+        }
+        usageStats.masterUnlockedReadingIDs = ids
     }
 
     // MARK: - 测试辅助方法（开发者模式可调用）

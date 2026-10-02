@@ -23,7 +23,10 @@ struct CoinTossPageView: View {
     @State private var hexagramInfo: (name: String, description: String)? = nil
     @State private var showResultPage = false
     @State private var showMasterCheckout = false
+    @State private var showProfessionalLimit = false
+    @State private var showDailyLimit = false
     @State private var selectedMode: Int = 0  // 0=专业模式, 1=大师模式
+    @StateObject private var permissionManager = PermissionManager.shared
     @Namespace private var modeSwitchNamespace
     
     // iPad适配
@@ -354,11 +357,18 @@ struct CoinTossPageView: View {
                             print("🎲 抛掷结果: \(tossResults)")
                             print("📊 框架信息: \(hexagramData)")
                             
-                            // 大师模式次数判断后续再接。现在一律先盖结算卡，不进入解读。
                             if selectedMode == 1 {
-                                withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) {
-                                    showMasterCheckout = true
-                                }
+                                openMasterInterpretation()
+                                return
+                            }
+
+                            if !permissionManager.canUseDivination() {
+                                showDailyLimit = true
+                                return
+                            }
+
+                            if !permissionManager.canUseProfessionalReading() {
+                                showProfessionalLimit = true
                                 return
                             }
 
@@ -370,7 +380,9 @@ struct CoinTossPageView: View {
                         }) {
                             HStack {
                                 Image(systemName: "eye.fill")
-                                Text("卦象解读")
+                                Text(resultButtonTitle)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                                 Image(systemName: "sparkles")
                             }
                             .font(.title3)
@@ -417,7 +429,7 @@ struct CoinTossPageView: View {
                                     print("[CoinTossPageView] 已返回到根视图")
                                 }
                             },
-                            castTime: castTime ?? Date(),
+                            castTime: resolvedCastTime,
                             interpretationMode: selectedMode == 0 ? .professional : .master,
                             liuYaoChart: liuYaoChart,
                             categorySource: categorySource,
@@ -443,13 +455,30 @@ struct CoinTossPageView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)  // 进入起卦页隐藏底部 Tab
+        .sheet(isPresented: $showDailyLimit) {
+            LimitReachedView(
+                limitType: .dailyDivination,
+                remaining: permissionManager.getDailyDivinationRemaining(),
+                resetTime: Calendar.current.date(byAdding: .day, value: 1, to: Date())
+            )
+        }
+        .sheet(isPresented: $showProfessionalLimit) {
+            LimitReachedView(
+                limitType: permissionManager.currentTier.isAnnual ? .monthlyReadingAnnual : .monthlyReadingMonthly,
+                remaining: 0,
+                resetTime: Calendar.current.date(byAdding: .month, value: 1, to: Date())
+            )
+        }
         .overlay {
             if showMasterCheckout {
-                MasterReadingCheckoutView {
+                MasterReadingCheckoutView(onClose: {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
                         showMasterCheckout = false
                     }
-                }
+                }, onPurchased: {
+                    showMasterCheckout = false
+                    enterMasterInterpretation()
+                })
                 .ignoresSafeArea(edges: .bottom)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -482,6 +511,10 @@ struct CoinTossPageView: View {
                     iconSelected: "checkmark.circle.fill",
                     iconUnselected: "circle"
                 ) {
+                    if !permissionManager.canUseDivination() {
+                        showDailyLimit = true
+                        return
+                    }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         selectedMode = 0
                     }
@@ -552,6 +585,47 @@ struct CoinTossPageView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    private var resolvedCastTime: Date {
+        castTime ?? currentTime
+    }
+
+    private var currentReadingID: String {
+        PermissionManager.readingID(
+            question: question,
+            castTime: resolvedCastTime,
+            hexagramName: hexagramInfo?.name ?? ""
+        )
+    }
+
+    private var resultButtonTitle: String {
+        guard selectedMode == 1 else { return "卦象解读" }
+        let left = permissionManager.totalMasterCredits()
+        if left > 0 { return "大师深度解读（剩余 \(left) 次）" }
+        return "大师深度解读 ¥12"
+    }
+
+    private func openMasterInterpretation() {
+        if permissionManager.totalMasterCredits() > 0 {
+            enterMasterInterpretation()
+        } else {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) {
+                showMasterCheckout = true
+            }
+        }
+    }
+
+    private func enterMasterInterpretation() {
+        guard permissionManager.consumeMasterCredit(readingID: currentReadingID) else {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) {
+                showMasterCheckout = true
+            }
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            showResultPage = true
+        }
     }
 
     // MARK: - 私有方法

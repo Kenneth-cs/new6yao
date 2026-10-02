@@ -42,6 +42,9 @@ final class AIRequestStateStore: ObservableObject {
 
     @Published private(set) var slots: [String: AIRequestSlot] = [:]
 
+    /// 本次进程里仍在飞的请求。进程被杀后集合为空，用来区分「还在等」和「上次没完成」。
+    private var inFlightKeys: Set<String> = []
+
     private let ud = UserDefaults.standard
     private let udKey = "AIRequestStateStore.v1"
 
@@ -52,9 +55,12 @@ final class AIRequestStateStore: ObservableObject {
     // ── 读 ──────────────────────────────────────────────────
     func slot(for key: String) -> AIRequestSlot? { slots[key] }
 
+    func isInFlight(key: String) -> Bool { inFlightKeys.contains(key) }
+
     // ── 写 ──────────────────────────────────────────────────
 
     func markLoading(key: String) {
+        inFlightKeys.insert(key)
         let slot = AIRequestSlot(status: .loading, result: "", timestamp: Date())
         update(key: key, slot: slot)
     }
@@ -74,11 +80,13 @@ final class AIRequestStateStore: ObservableObject {
             questionInterpretation: questionInterpretation,
             guidanceAdvice: guidanceAdvice
         )
+        inFlightKeys.remove(key)
         update(key: key, slot: slot)
         sendNotificationIfBackgrounded(for: key)
     }
 
     func markFailed(key: String, message: String, failureCode: Int? = nil) {
+        inFlightKeys.remove(key)
         let slot = AIRequestSlot(status: .failed, result: message, timestamp: Date(), failureCode: failureCode)
         update(key: key, slot: slot)
     }
@@ -121,7 +129,11 @@ final class AIRequestStateStore: ObservableObject {
         let cutoff = Date().addingTimeInterval(-5 * 60)
         for key in saved.keys where saved[key]?.status == .loading && (saved[key]?.timestamp ?? Date()) < cutoff {
             saved[key]?.status = .failed
-            saved[key]?.result = "上次解读未完成，请点击「重新解读」重试"
+            if key.hasPrefix("deduction_") {
+                saved[key]?.result = "上次推演未完成，请重新开始推演"
+            } else {
+                saved[key]?.result = "上次解读未完成，请点击「重新解读」重试"
+            }
         }
         slots = saved
     }
@@ -164,6 +176,7 @@ final class AIRequestStateStore: ObservableObject {
 
     private func notifTitle(for key: String) -> String {
         if key.hasPrefix("divination_") { return "解卦完成 ✨" }
+        if key.hasPrefix("deduction_")  { return "推演完成 ✨" }
         if key.hasPrefix("matrix_")     { return "决策分析完成 🎯" }
         if key.hasPrefix("swot_")       { return "SWOT分析完成 💡" }
         return "AI分析完成"
@@ -171,6 +184,7 @@ final class AIRequestStateStore: ObservableObject {
 
     private func notifBody(for key: String) -> String {
         if key.hasPrefix("divination_") { return "点击查看您的卦象解读" }
+        if key.hasPrefix("deduction_")  { return "点击查看局势推演结果" }
         if key.hasPrefix("matrix_")     { return "点击查看五行决策矩阵结果" }
         if key.hasPrefix("swot_")       { return "点击查看SWOT分析结果" }
         return "点击返回查看结果"

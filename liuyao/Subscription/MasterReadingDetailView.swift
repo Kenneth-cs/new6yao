@@ -5,6 +5,8 @@ import SwiftUI
 
 struct MasterReadingDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var subscriptionService = SubscriptionService.shared
+    @State private var purchaseError: String?
 
     private let buyColor = Color(red: 148.0 / 255, green: 79.0 / 255, blue: 230.0 / 255)
 
@@ -67,7 +69,7 @@ struct MasterReadingDetailView: View {
                         subtitle: "重度用户首选，解锁更多可能",
                         price: "¥68"
                     )
-                    DecisionBundleCard()
+                    DecisionBundleCard(onPurchased: finishPurchase)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
@@ -81,6 +83,14 @@ struct MasterReadingDetailView: View {
         .profileHidesTopScrollEdge()
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .alert("购买未完成", isPresented: Binding(
+            get: { purchaseError != nil },
+            set: { if !$0 { purchaseError = nil } }
+        )) {
+            Button("确定", role: .cancel) { purchaseError = nil }
+        } message: {
+            Text(purchaseError ?? "")
+        }
     }
 
     private var topInset: CGFloat {
@@ -158,7 +168,7 @@ struct MasterReadingDetailView: View {
                 Text("大师解读")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(ProfilePalette.ink)
-                Text("15段深度报告 · 专业视角解读 · 7000字全面解析")
+                Text("15段深度报告 · 专业视角解读 · 每卦可追问 66次")
                     .font(.system(size: 13))
                     .foregroundColor(ProfilePalette.muted)
             }
@@ -327,11 +337,15 @@ struct MasterReadingDetailView: View {
                     .foregroundColor(buyColor)
                 Spacer()
                 Button {
-                    // 购买后续再接
+                    purchase(count: count)
                 } label: {
                     Text("购买")
                 }
-                .buttonStyle(AccentBuyButtonStyle(compact: false))
+                .buttonStyle(AccentBuyButtonStyle(
+                    compact: false,
+                    isLoading: subscriptionService.purchasingProductID == SubscriptionConfig.masterProductID(count: count)
+                ))
+                .disabled(subscriptionService.isPurchasing)
             }
         }
         .padding(16)
@@ -351,6 +365,28 @@ struct MasterReadingDetailView: View {
         case .soft: return buyColor.opacity(0.10)
         case .gold: return Color(red: 1.0, green: 0.90, blue: 0.55)
         case .value: return Color(red: 0.93, green: 0.88, blue: 1.0)
+        }
+    }
+
+    private func finishPurchase() {
+        ToastManager.shared.showPurchaseSuccess {
+            dismiss()
+        }
+    }
+
+    private func purchase(count: Int) {
+        guard let productID = SubscriptionConfig.masterProductID(count: count) else { return }
+        Task {
+            do {
+                let ok = try await subscriptionService.purchaseConsumable(productID)
+                if ok {
+                    finishPurchase()
+                } else if let message = subscriptionService.purchaseError, !message.isEmpty {
+                    purchaseError = message
+                }
+            } catch {
+                purchaseError = error.localizedDescription
+            }
         }
     }
 

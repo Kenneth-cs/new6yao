@@ -7,9 +7,13 @@ struct DeductionPrepView: View {
     let castTime: Date
     let aiInterpretation: String
     var sourceRecord: DivinationRecord? = nil
+    var archiveDraft: DivinationArchiveDraft? = nil
+    var onArchiveCreated: (DivinationRecord) -> Void = { _ in }
     let onDismiss: () -> Void
     let onViewOriginal: () -> Void
     
+    @ObservedObject private var aiStore = AIRequestStateStore.shared
+    @State private var linkedRecord: DivinationRecord?
     @State private var backgroundText: String = ""
     @State private var isLinkedToOriginal = true
     @State private var showDeductionResult = false
@@ -100,11 +104,31 @@ struct DeductionPrepView: View {
                     report: report,
                     hexagramName: hexagramName,
                     displayQuestion: originalQuestion,
-                    sourceRecord: sourceRecord,
-                    onDismiss: { showDeductionResult = false },
-                    onEditBackground: { showDeductionResult = false }
+                    sourceRecord: linkedRecord ?? sourceRecord,
+                    archiveDraft: archiveDraft,
+                    onArchiveCreated: { record in
+                        linkedRecord = record
+                        onArchiveCreated(record)
+                    },
+                    onDismiss: {
+                        showDeductionResult = false
+                        aiStore.clearSlot(key: requestKey)
+                    },
+                    onEditBackground: {
+                        showDeductionResult = false
+                        aiStore.clearSlot(key: requestKey)
+                    }
                 )
             }
+        }
+        .onAppear {
+            if linkedRecord == nil {
+                linkedRecord = sourceRecord
+            }
+            restoreDeductionSlot()
+        }
+        .onChange(of: aiStore.slot(for: requestKey)?.status) { _ in
+            restoreDeductionSlot()
         }
         .onChange(of: errorMessage) { message in
             guard message != nil else { return }
@@ -245,16 +269,10 @@ struct DeductionPrepView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack(alignment: .trailing) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(ResultTheme.softStrong)
-                DeductionMountains()
-                    .frame(width: 120, height: 78)
-                    .padding(.trailing, 4)
-                    .allowsHitTesting(false)
-            }
-        )
+        .background {
+            ResultQuestionBannerBackground()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
     // MARK: - Three paths
@@ -414,8 +432,15 @@ struct DeductionPrepView: View {
             errorMessage = "缺少卦象数据，无法推演"
             return
         }
+        guard PermissionManager.shared.consumeDeductionCredit() else {
+            errorMessage = "推演次数不足，请先购买推演点券"
+            return
+        }
         isLoading = true
         errorMessage = nil
+        let key = requestKey
+        let store = aiStore
+        store.markLoading(key: key)
         let background = includeBackground ? backgroundText : ""
         let question = originalQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         let interpretation = aiInterpretation
@@ -431,9 +456,10 @@ struct DeductionPrepView: View {
                     castTime: time,
                     canonicalSummary: summary
                 )
+                let encoded = Self.encodeReport(report)
                 await MainActor.run {
-                    if let sourceRecord {
-                        _ = DataService().saveDeductionReport(report, for: sourceRecord)
+                    if let encoded {
+                        store.markSuccess(key: key, result: encoded)
                     }
                     deductionReport = report
                     isLoading = false
@@ -441,11 +467,56 @@ struct DeductionPrepView: View {
                 }
             } catch {
                 await MainActor.run {
+                    PermissionManager.shared.refundDeductionCredit()
+                    store.markFailed(key: key, message: "推演失败，请重试")
                     isLoading = false
                     errorMessage = "推演失败，请重试"
                 }
             }
         }
+    }
+
+    /// 同一卦的推演共用一个 key，页面重建后仍能对上进行中的请求。
+    private var requestKey: String {
+        let stamp = String(format: "%.0f", castTime.timeIntervalSince1970)
+        return "deduction_\(stamp)"
+    }
+
+    private func restoreDeductionSlot() {
+        guard let slot = aiStore.slot(for: requestKey) else { return }
+        switch slot.status {
+        case .loading:
+            guard aiStore.isInFlight(key: requestKey) else {
+                isLoading = false
+                errorMessage = "上次推演未完成，请重新开始推演"
+                aiStore.markFailed(key: requestKey, message: "上次推演未完成，请重新开始推演")
+                return
+            }
+            errorMessage = nil
+            isLoading = true
+        case .success:
+            isLoading = false
+            errorMessage = nil
+            guard !showDeductionResult, let report = Self.decodeReport(slot.result) else { return }
+            deductionReport = report
+            showDeductionResult = true
+        case .failed:
+            isLoading = false
+            if !showDeductionResult, !slot.result.isEmpty {
+                errorMessage = slot.result
+            }
+            aiStore.clearSlot(key: requestKey)
+        }
+    }
+
+    private static func encodeReport(_ report: DeductionReport) -> String? {
+        guard let data = try? JSONEncoder().encode(report) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeReport(_ raw: String) -> DeductionReport? {
+        guard let data = raw.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(DeductionReport.self, from: data)
     }
     
     private func buildCanonicalSummary(from parsed: MasterReportParser.Result) -> String {

@@ -17,12 +17,93 @@ struct SubscriptionConfig {
     
     /// 专业版年订阅产品ID
     static let proYearlyProductID = "com.renshengjiaoliankd.pro.yearly"
+
+    /// 大师解读点券
+    static let master1ProductID = "com.renshengjiaoliankd.master.1"
+    static let master3ProductID = "com.renshengjiaoliankd.master.3"
+    static let master10ProductID = "com.renshengjiaoliankd.master.10"
+
+    /// 推演点券
+    static let deduction1ProductID = "com.renshengjiaoliankd.deduction.1"
+    static let deduction3ProductID = "com.renshengjiaoliankd.deduction.3"
+    static let deduction10ProductID = "com.renshengjiaoliankd.deduction.10"
+
+    /// 决策套餐：大师 ×1 + 推演 ×1
+    static let bundleProductID = "com.renshengjiaoliankd.bundle.decision"
+
+    static let consumableProductIDs: Set<String> = [
+        master1ProductID,
+        master3ProductID,
+        master10ProductID,
+        deduction1ProductID,
+        deduction3ProductID,
+        deduction10ProductID,
+        bundleProductID
+    ]
     
     /// 所有产品ID列表
     static let allProductIDs: Set<String> = [
         proMonthlyProductID,
-        proYearlyProductID
+        proYearlyProductID,
+        master1ProductID,
+        master3ProductID,
+        master10ProductID,
+        deduction1ProductID,
+        deduction3ProductID,
+        deduction10ProductID,
+        bundleProductID
     ]
+
+    static let annualPrice: Decimal = 99
+
+    static let freeFollowUpLimit = 3
+    static let paidFollowUpLimit = 66
+    static let monthlyReadingLimit = 66
+    static let annualReadingLimit = 88
+    static let monthlyMasterGift = 1
+    static let annualMasterGift = 2
+
+    static func isConsumable(_ productID: String) -> Bool {
+        consumableProductIDs.contains(productID)
+    }
+
+    static func masterProductID(count: Int) -> String? {
+        switch count {
+        case 1: return master1ProductID
+        case 3: return master3ProductID
+        case 10: return master10ProductID
+        default: return nil
+        }
+    }
+
+    static func deductionProductID(count: Int) -> String? {
+        switch count {
+        case 1: return deduction1ProductID
+        case 3: return deduction3ProductID
+        case 10: return deduction10ProductID
+        default: return nil
+        }
+    }
+
+    static func masterCreditCount(for productID: String) -> Int {
+        switch productID {
+        case master1ProductID: return 1
+        case master3ProductID: return 3
+        case master10ProductID: return 10
+        case bundleProductID: return 1
+        default: return 0
+        }
+    }
+
+    static func deductionCreditCount(for productID: String) -> Int {
+        switch productID {
+        case deduction1ProductID: return 1
+        case deduction3ProductID: return 3
+        case deduction10ProductID: return 10
+        case bundleProductID: return 1
+        default: return 0
+        }
+    }
     
     // MARK: - 免费版配额
     
@@ -120,6 +201,9 @@ struct SubscriptionConfig {
         
         /// 是否已显示过订阅介绍
         static let hasShownIntroduction = "has_shown_subscription_intro"
+
+        /// 已入账的消耗型交易 ID，避免重复加点券
+        static let processedConsumableTransactions = "processed_consumable_transactions"
     }
     
     // MARK: - 功能开关
@@ -181,15 +265,32 @@ struct SubscriptionConfig {
                 monthlySWOTLimit:      freeMonthlySWOT,
                 monthlyMatrixLimit:    freeMonthlyMatrix,
                 historyRecordsLimit:   freeHistoryLimit,
-                dailyFiveElementLimit: 1
+                dailyFiveElementLimit: 1,
+                monthlyReadingLimit:   0,
+                followUpLimit:         freeFollowUpLimit,
+                monthlyMasterGift:     0
             )
-        case .proMonthly, .proYearly:
+        case .proMonthly:
             return UsageQuota(
                 dailyDivinationLimit:  proDailyDivination,
                 monthlySWOTLimit:      proMonthlySWOT,
                 monthlyMatrixLimit:    proMonthlyMatrix,
                 historyRecordsLimit:   proHistoryLimit,
-                dailyFiveElementLimit: -1
+                dailyFiveElementLimit: -1,
+                monthlyReadingLimit:   monthlyReadingLimit,
+                followUpLimit:         paidFollowUpLimit,
+                monthlyMasterGift:     monthlyMasterGift
+            )
+        case .proYearly:
+            return UsageQuota(
+                dailyDivinationLimit:  proDailyDivination,
+                monthlySWOTLimit:      proMonthlySWOT,
+                monthlyMatrixLimit:    proMonthlyMatrix,
+                historyRecordsLimit:   proHistoryLimit,
+                dailyFiveElementLimit: -1,
+                monthlyReadingLimit:   annualReadingLimit,
+                followUpLimit:         paidFollowUpLimit,
+                monthlyMasterGift:     annualMasterGift
             )
         }
     }

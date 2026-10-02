@@ -8,8 +8,9 @@ struct DivinationPageView: View {
     @State private var question = ""
     @State private var divinationStartTime: Date?
     @State private var showEmptyAlert = false
-    @State private var showSubscriptionPrompt = false
+    @State private var showProUpgrade = false
     @State private var showLimitReached = false
+    @State private var showMonthlyLimitSheet = false
     @State private var navigateToCoinToss = false
     let currentTime: Date
     let locationManager: LocationManager
@@ -77,17 +78,21 @@ struct DivinationPageView: View {
                 categoryHint: effectiveCategoryHint
             )
         }
-        .sheet(isPresented: $showSubscriptionPrompt) {
-            SubscriptionPromptView(
-                isPresented: $showSubscriptionPrompt,
-                trigger: .dailyLimitReached
-            )
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
         }
         .sheet(isPresented: $showLimitReached) {
             LimitReachedView(
                 limitType: .dailyDivination,
                 remaining: permissionManager.getDailyDivinationRemaining(),
                 resetTime: Calendar.current.date(byAdding: .day, value: 1, to: Date())
+            )
+        }
+        .sheet(isPresented: $showMonthlyLimitSheet) {
+            LimitReachedView(
+                limitType: permissionManager.currentTier.isAnnual ? .monthlyReadingAnnual : .monthlyReadingMonthly,
+                remaining: 0,
+                resetTime: Calendar.current.date(byAdding: .month, value: 1, to: Date())
             )
         }
         .alert("请输入问题", isPresented: $showEmptyAlert) {
@@ -244,7 +249,7 @@ struct DivinationPageView: View {
             }
             Spacer(minLength: 6)
             Button {
-                showSubscriptionPrompt = true
+                showProUpgrade = true
             } label: {
                 Text("升级")
                     .font(.system(size: 13, weight: .semibold))
@@ -320,13 +325,18 @@ struct DivinationPageView: View {
             return
         }
         
-        // 检查使用权限
-        if permissionManager.canUseDivination() {
-            // 有权限，增加计数并导航
-            navigateToCoinToss = true
-        } else {
-            // 无权限，显示限制提示
+        if !permissionManager.canUseDivination() {
             showLimitReached = true
+            return
         }
+        if !permissionManager.canUseProfessionalReading() {
+            if permissionManager.totalMasterCredits() > 0 {
+                navigateToCoinToss = true
+                return
+            }
+            showMonthlyLimitSheet = true
+            return
+        }
+        navigateToCoinToss = true
     }
 }

@@ -17,6 +17,8 @@ struct ParticleCollisionView: View {
     @State private var showWarning   = false
     @State private var showCompletion = false
     @State private var navigateToResult = false
+    @State private var showFiveElementLimit = false
+    @State private var analysisRequested = false
 
     // ── 轨道动效 ──
     @State private var orbitAngle: Double = 0    // 粒子公转驱动角（0 → 2π×100）
@@ -115,8 +117,15 @@ struct ParticleCollisionView: View {
         }
         .onAppear {
             startOrbitAnimations()
-            startAnimation()
-            startAIAnalysis()
+            if PermissionManager.shared.canUseFiveElementDecision() {
+                startAnimation()
+                startAIAnalysis()
+            } else {
+                showFiveElementLimit = true
+            }
+        }
+        .sheet(isPresented: $showFiveElementLimit) {
+            ProUpgradeView()
         }
     }
 
@@ -626,6 +635,12 @@ struct ParticleCollisionView: View {
 
     // MARK: - AI 分析（与动画并行）
     private func startAIAnalysis() {
+        guard !analysisRequested else { return }
+        guard PermissionManager.shared.canUseFiveElementDecision() else {
+            showFiveElementLimit = true
+            return
+        }
+        analysisRequested = true
         let scenarioName = scenario?.name ?? "通用决策"
         let validOptions = options.isEmpty ? [optionA, optionB] : options
         requestId = UUID().uuidString
@@ -711,6 +726,11 @@ struct ParticleCollisionView: View {
     }
 
     private func retryAnalysis() {
+        guard PermissionManager.shared.canUseFiveElementDecision() else {
+            showFiveElementLimit = true
+            return
+        }
+        analysisRequested = false
         showFailure = false
         showCompletion = false
         showWarning = false

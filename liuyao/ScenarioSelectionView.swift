@@ -19,7 +19,7 @@ struct ScenarioSelectionView: View {
     @State private var selectedScenario: DecisionScenario? = nil
     @State private var optionInputs: [String] = [""]
     @State private var navigateToParticle = false
-    @State private var showSubscriptionPrompt = false
+    @State private var showProUpgrade = false
 
     @ObservedObject private var pm = PermissionManager.shared
 
@@ -85,8 +85,8 @@ struct ScenarioSelectionView: View {
                 options: optionInputs.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             )
         }
-        .sheet(isPresented: $showSubscriptionPrompt) {
-            SubscriptionPromptView(isPresented: $showSubscriptionPrompt, trigger: .dailyLimitReached)
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
         }
     }
 
@@ -145,12 +145,12 @@ struct ScenarioSelectionView: View {
 
                     Spacer()
 
-                    // 名称 + 英文+元素标签
+                    // 名称 + 说明 + 五行
                     VStack(alignment: .leading, spacing: 3) {
                         Text(scenario.name)
                             .font(.subheadline).fontWeight(.bold)
                             .foregroundColor(.primary)
-                        Text("\(scenario.englishName) · [\(scenario.element.rawValue)]")
+                        Text("\(scenario.subtitle) · [\(scenario.element.rawValue)]")
                             .font(.caption2)
                             .foregroundColor(scenario.element.color)
                     }
@@ -191,7 +191,7 @@ struct ScenarioSelectionView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(scenario.name)
                             .font(.subheadline).fontWeight(.bold)
-                        Text("\(scenario.englishName) · [\(scenario.element.rawValue)]")
+                        Text("\(scenario.subtitle) · [\(scenario.element.rawValue)]")
                             .font(.caption2).foregroundColor(scenario.element.color)
                     }
 
@@ -259,7 +259,7 @@ struct ScenarioSelectionView: View {
                     if pm.canUseFiveElementDecision() {
                         navigateToParticle = true
                     } else {
-                        showSubscriptionPrompt = true
+                        showProUpgrade = true
                     }
                 }) {
                     HStack(spacing: 8) {

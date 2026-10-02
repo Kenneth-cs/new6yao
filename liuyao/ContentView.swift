@@ -1489,12 +1489,12 @@ struct ResultView: View {
     private func saveRecord() {
         guard let result = divinationResult else { return }
         
-        dataService.saveDivinationRecord(
+        guard dataService.saveDivinationRecord(
             question: question,
             tossResults: tossResults,
             aiInterpretation: result.aiInterpretation,
             advice: result.advice
-        )
+        ) != nil else { return }
         
         withAnimation {
             isSaved = true

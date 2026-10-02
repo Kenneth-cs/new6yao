@@ -17,7 +17,7 @@ struct DecisionMatrixView: View {
     @State private var showAIAnalysis = false
     @State private var aiAnalysis = ""
     @State private var isLoadingAI = false
-    @State private var showSubscriptionPrompt = false
+    @State private var showProUpgrade = false
     @State private var showLimitReached = false
     @ObservedObject private var aiStore = AIRequestStateStore.shared
     @State private var requestId = UUID().uuidString
@@ -67,11 +67,8 @@ struct DecisionMatrixView: View {
         }
         .navigationTitle("决策矩阵")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showSubscriptionPrompt) {
-            SubscriptionPromptView(
-                isPresented: $showSubscriptionPrompt,
-                trigger: .matrixLimitReached
-            )
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
         }
         .sheet(isPresented: $showLimitReached) {
             LimitReachedView(
@@ -192,7 +189,7 @@ struct DecisionMatrixView: View {
                     Spacer()
                     
                     Button(action: {
-                        showSubscriptionPrompt = true
+                        showProUpgrade = true
                     }) {
                         Text("升级")
                             .font(.caption)
@@ -279,6 +276,10 @@ struct DecisionMatrixView: View {
     }
     
     private func analyzeWithAI() {
+        guard permissionManager.canUseMatrix() else {
+            showLimitReached = true
+            return
+        }
         requestId = UUID().uuidString
         analysisStartedAt = Date()
         analysisFailure = nil
@@ -318,10 +319,10 @@ struct DecisionMatrixView: View {
                 
                 await MainActor.run {
                     aiAnalysis = result
+                    permissionManager.incrementMatrixCount()
                     isLoadingAI = false
                     analysisFailure = nil
                     aiStore.markSuccess(key: matrixKey, result: result)
-                    permissionManager.incrementMatrixCount()
                     AnalyticsManager.shared.incrementMatrixCount()
                     let topScore = options.map(\.score).max() ?? 0
                     let level: String

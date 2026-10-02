@@ -15,7 +15,7 @@ enum ProfilePalette {
 }
 
 /// 新 UI 先按设计稿假数据展示。改为 false 后，身份次数走真实订阅，历史走 RecentDecisionsSection，统计走 StatisticsService。
-let profileUsesMockData = true
+let profileUsesMockData = false
 
 extension View {
     /// iOS 26 会在滚动视图顶部盖一层浅色边缘，把头图裁成一条白边。
@@ -53,11 +53,39 @@ struct ProfileHeaderSection: View {
 
     private var displaySubtitle: String {
         if usesPreviewData { return "每天 1 次专业解读" }
-        return subscriptionService.isPro ? "无限专业解读，畅享全部功能" : "每天 1 次专业解读"
+        switch permissionManager.currentTier {
+        case .free:
+            return "每天 1 次专业解读"
+        case .proMonthly:
+            return "每月 66次专业解读"
+        case .proYearly:
+            return "每月 88次专业解读"
+        }
     }
 
     private var displayRemaining: Int {
-        usesPreviewData ? 1 : remainingCount
+        if usesPreviewData { return 1 }
+        if permissionManager.currentTier.isPro {
+            return permissionManager.monthlyReadingRemaining()
+        }
+        return remainingCount
+    }
+
+    private var remainingTitle: String {
+        permissionManager.currentTier.isPro && !usesPreviewData ? "本月剩余" : "今日剩余"
+    }
+
+    private var creditSummary: String? {
+        guard !usesPreviewData else { return nil }
+        var parts: [String] = []
+        let master = permissionManager.usageStats.masterCredits
+        let deduction = permissionManager.usageStats.deductionCredits
+        let gift = permissionManager.monthlyMasterGiftRemaining()
+        if master > 0 { parts.append("大师 ×\(master)") }
+        if deduction > 0 { parts.append("推演 ×\(deduction)") }
+        if gift > 0 { parts.append("大师解卦赠\(gift)次/月") }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
     }
 
     var body: some View {
@@ -182,6 +210,17 @@ struct ProfileHeaderSection: View {
                     .font(.system(size: 13))
                     .foregroundColor(ProfilePalette.muted)
                     .lineLimit(1)
+                if let creditSummary {
+                    Text(creditSummary)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(ProfilePalette.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text("点击起卦后可用")
+                        .font(.system(size: 11))
+                        .foregroundColor(ProfilePalette.faint)
+                        .lineLimit(1)
+                }
                 Text("愿你在探索中，遇见更好的自己 ✦")
                     .font(.system(size: 11))
                     .foregroundColor(ProfilePalette.faint)
@@ -200,7 +239,6 @@ struct ProfileHeaderSection: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: 64, height: 64)
-                .scaleEffect(1.15)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                 .shadow(color: ProfilePalette.accent.opacity(0.16), radius: 8, y: 3)
@@ -218,7 +256,7 @@ struct ProfileHeaderSection: View {
 
     private var remainingBadge: some View {
         VStack(spacing: 0) {
-            Text("今日剩余")
+            Text(remainingTitle)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(ProfilePalette.accent)
             Text("\(displayRemaining)")
@@ -305,7 +343,7 @@ struct UnlockFeaturesSection: View {
             )
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("会员")
+                    Text("会员与点券")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(ProfilePalette.ink)
                     Text("推荐")
@@ -325,7 +363,7 @@ struct UnlockFeaturesSection: View {
                             in: Capsule()
                         )
                 }
-                Text("无限专业解读 + 无限历史 + 无限追问 +\n每月 1 次大师（含追问）")
+                Text("开通会员，或按次购买大师解读、推演点券")
                     .font(.system(size: 12))
                     .foregroundColor(ProfilePalette.muted)
                     .lineSpacing(2)
@@ -660,6 +698,7 @@ struct ProfileAppManagementSection: View {
     @Binding var showingCacheCleanup: Bool
     @Binding var showingPrivacySettings: Bool
     @State private var showingNotificationSettings = false
+    @State private var showingHelpFeedback = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -699,6 +738,15 @@ struct ProfileAppManagementSection: View {
                     background: Color(red: 0.88, green: 0.97, blue: 0.92),
                     title: "隐私设置"
                 ) { showingPrivacySettings = true }
+
+                Divider().padding(.leading, 62)
+
+                ProfileAppRow(
+                    systemName: "questionmark.bubble.fill",
+                    tint: ProfilePalette.accent,
+                    background: ProfilePalette.accent.opacity(0.12),
+                    title: "帮助与反馈"
+                ) { showingHelpFeedback = true }
             }
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -709,6 +757,55 @@ struct ProfileAppManagementSection: View {
         .sheet(isPresented: $showingNotificationSettings) {
             NotificationSettingsView()
         }
+        .sheet(isPresented: $showingHelpFeedback) {
+            HelpFeedbackSheet()
+        }
+    }
+}
+
+private struct HelpFeedbackSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(ProfilePalette.muted)
+                        .frame(width: 30, height: 30)
+                        .background(ProfilePalette.page, in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+
+            Text("遇到问题？联系小助手")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(ProfilePalette.ink)
+                .multilineTextAlignment(.center)
+                .padding(.top, 4)
+
+            Text("添加微信时请备注：人生教练")
+                .font(.system(size: 13))
+                .foregroundColor(ProfilePalette.muted)
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+                .padding(.horizontal, 24)
+
+            Image("WeChatAssistantQR")
+                .resizable()
+                .scaledToFit()
+                .padding(.horizontal, 28)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.white)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 

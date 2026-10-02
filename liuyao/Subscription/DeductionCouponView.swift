@@ -4,7 +4,11 @@ import SwiftUI
 // 购买与底部说明入口后续再接。不改动已有的推演报告页。
 
 struct DeductionCouponView: View {
+    var hasMasterReading: Bool = false
+
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var subscriptionService = SubscriptionService.shared
+    @State private var purchaseError: String?
 
     private let buyColor = Color(red: 148.0 / 255, green: 79.0 / 255, blue: 230.0 / 255)
 
@@ -24,7 +28,7 @@ struct DeductionCouponView: View {
                     introCard
                     analysisCard
                     planCard
-                    DecisionBundleCard()
+                    DecisionBundleCard(deductionOnly: hasMasterReading, onPurchased: finishPurchase)
                     faqRow
                 }
                 .padding(.horizontal, 16)
@@ -39,6 +43,14 @@ struct DeductionCouponView: View {
         .profileHidesTopScrollEdge()
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .alert("购买未完成", isPresented: Binding(
+            get: { purchaseError != nil },
+            set: { if !$0 { purchaseError = nil } }
+        )) {
+            Button("确定", role: .cancel) { purchaseError = nil }
+        } message: {
+            Text(purchaseError ?? "")
+        }
     }
 
     private var topInset: CGFloat {
@@ -197,8 +209,8 @@ struct DeductionCouponView: View {
             }
 
             skuRow(count: 1, unitPrice: nil, note: "三条推演路径（含通知）", price: "¥8")
-            skuRow(count: 3, unitPrice: "约 9.3/次", note: "三条推演路径（含通知）· 更划算", price: "¥28")
-            skuRow(count: 10, unitPrice: "约 6.3/次", note: "三条推演路径（含通知）· 重度用户首选", price: "¥68")
+            skuRow(count: 3, unitPrice: "约6/次，比单次省¥6", note: "三条推演路径（含通知）· 更划算", price: "¥18")
+            skuRow(count: 10, unitPrice: "约4.5/次，比单次省¥35", note: "三条推演路径（含通知）· 重度用户首选", price: "¥45")
         }
         .padding(14)
         .background(cardBackground)
@@ -245,11 +257,15 @@ struct DeductionCouponView: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Button {
-                // 购买后续再接
+                purchase(count: count)
             } label: {
                 Text("购买")
             }
-            .buttonStyle(AccentBuyButtonStyle(compact: true))
+            .buttonStyle(AccentBuyButtonStyle(
+                compact: true,
+                isLoading: subscriptionService.purchasingProductID == SubscriptionConfig.deductionProductID(count: count)
+            ))
+            .disabled(subscriptionService.isPurchasing)
         }
         .padding(10)
         .background(
@@ -280,6 +296,28 @@ struct DeductionCouponView: View {
         }
         .padding(14)
         .background(cardBackground)
+    }
+
+    private func finishPurchase() {
+        ToastManager.shared.showPurchaseSuccess {
+            dismiss()
+        }
+    }
+
+    private func purchase(count: Int) {
+        guard let productID = SubscriptionConfig.deductionProductID(count: count) else { return }
+        Task {
+            do {
+                let ok = try await subscriptionService.purchaseConsumable(productID)
+                if ok {
+                    finishPurchase()
+                } else if let message = subscriptionService.purchaseError, !message.isEmpty {
+                    purchaseError = message
+                }
+            } catch {
+                purchaseError = error.localizedDescription
+            }
+        }
     }
 
     private var cardBackground: some View {

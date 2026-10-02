@@ -67,6 +67,7 @@ struct MainTabView: View {
             .tag(4)
         }
         .tint(.purple)  // Tab选中颜色
+        .toastHost(bottomPadding: 88)
         .onAppear {
             // 每次 App 进入前台时按需刷新每日推送文案
             DailyNotificationContentService.shared.refreshIfNeeded()

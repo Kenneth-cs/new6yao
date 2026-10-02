@@ -208,6 +208,23 @@ extension FeedbackRecord {
 
 // 删除 Identifiable 扩展，因为自动生成的代码已经包含了
 
+/// 把当前解卦结果页写成一条历史所需的内容。推演和追问在结果还没保存时，用它补建同一条记录。
+struct DivinationArchiveDraft {
+    let question: String
+    let tossResults: [Bool]
+    let aiInterpretation: String
+    let advice: String
+    let castTime: Date
+    let mode: InterpretationMode?
+    let chart: LiuYaoReading?
+    let yaoLines: [YaoXiang]
+    let category: String?
+    let categorySource: CategorySource?
+    let locationName: String?
+    let oneSentenceConclusion: String?
+    let followUpSuggestions: [String]
+}
+
 // MARK: - Data Service
 class DataService: ObservableObject {
     private let viewContext: NSManagedObjectContext
@@ -232,6 +249,10 @@ class DataService: ObservableObject {
         oneSentenceConclusion: String? = nil,
         followUpSuggestions: [String] = []
     ) -> DivinationRecord? {
+        guard PermissionManager.shared.canSaveMoreRecords() else {
+            print("历史记录已达上限，未写入新记录")
+            return nil
+        }
         let record = DivinationRecord(context: viewContext)
         record.id = UUID()
         record.question = question
@@ -253,12 +274,38 @@ class DataService: ObservableObject {
         
         do {
             try viewContext.save()
+            PermissionManager.shared.syncHistoryRecordCount()
             print("问卦记录保存成功")
             return record
         } catch {
             print("保存失败: \(error)")
             return nil
         }
+    }
+
+    /// 已有记录就沿用；还没有时按当前页内容新建一条。不改动记录上已有的推演和追问。
+    @discardableResult
+    func ensureDivinationArchive(
+        existing: DivinationRecord?,
+        draft: DivinationArchiveDraft?
+    ) -> DivinationRecord? {
+        if let existing { return existing }
+        guard let draft else { return nil }
+        return saveDivinationRecord(
+            question: draft.question,
+            tossResults: draft.tossResults,
+            aiInterpretation: draft.aiInterpretation,
+            advice: draft.advice,
+            castTime: draft.castTime,
+            mode: draft.mode,
+            chart: draft.chart,
+            yaoLines: draft.yaoLines,
+            category: draft.category,
+            categorySource: draft.categorySource,
+            locationName: draft.locationName,
+            oneSentenceConclusion: draft.oneSentenceConclusion,
+            followUpSuggestions: draft.followUpSuggestions
+        )
     }
 
     @discardableResult
@@ -366,6 +413,7 @@ class DataService: ObservableObject {
         
         do {
             try viewContext.save()
+            PermissionManager.shared.syncHistoryRecordCount()
             print("记录删除成功")
         } catch {
             print("删除失败: \(error)")

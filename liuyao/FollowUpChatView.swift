@@ -79,11 +79,14 @@ struct FollowUpChatView: View {
     let hexagramContext: HexagramContext
     var existingSession: FollowUpSession? = nil
     var linkedRecord: DivinationRecord? = nil
+    var archiveDraft: DivinationArchiveDraft? = nil
+    var onArchiveCreated: (DivinationRecord) -> Void = { _ in }
     let onDismiss: (FollowUpSession?) -> Void
     let onViewFullInterpretation: () -> Void
 
     @State private var messages: [FollowUpChatMessage] = []
     @State private var session: FollowUpSession?
+    @State private var attachedRecord: DivinationRecord?
     @State private var inputText = ""
     @State private var suggestionBatchIndex = -1
     @State private var usedSuggestions: Set<String> = []
@@ -94,7 +97,20 @@ struct FollowUpChatView: View {
     @State private var composerMode: ComposerMode = .text
     @StateObject private var voice = VoiceInputModel()
     @StateObject private var dataService = DataService()
+    @StateObject private var permissionManager = PermissionManager.shared
+    @State private var showProUpgrade = false
+    @State private var followUpBlocked = false
+    @State private var didWarnHistoryLimit = false
+    @State private var followUpIsPaidCap = false
     @FocusState private var isInputFocused: Bool
+
+    private var readingID: String {
+        PermissionManager.readingID(
+            question: hexagramContext.question,
+            castTime: hexagramContext.castTime,
+            hexagramName: hexagramContext.hexagramName
+        )
+    }
 
     private let fallbackBatches: [[String]] = [
         ["为什么会得出这个判断？", "现在最该先做哪一步？", "接下来趋势会怎么走？"],
@@ -179,6 +195,9 @@ struct FollowUpChatView: View {
             }
         }
         .onAppear(perform: prepareIfNeeded)
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
+        }
         .onChange(of: voice.hint) { text in
             guard let text else { return }
             showToast(text)
@@ -191,6 +210,7 @@ struct FollowUpChatView: View {
                 if let session {
                     dataService.saveFollowUpMessages([], to: session)
                 }
+                refreshFollowUpGate()
             }
         } message: {
             Text("将清除本次追问中的全部对话，卦象信息仍会保留。")
@@ -210,7 +230,7 @@ struct FollowUpChatView: View {
             Spacer()
 
             VStack(spacing: 3) {
-                Text("追问教练")
+                Text("追问解惑")
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundColor(ResultTheme.primary)
@@ -359,6 +379,23 @@ struct FollowUpChatView: View {
                     userBubble(message)
                 } else {
                     coachBubble(message)
+                }
+            }
+            if followUpBlocked {
+                if followUpIsPaidCap {
+                    Text("本卦追问已达上限（66次）。如需继续探索，建议重新起卦")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(.systemBackground))
+                        )
+                } else {
+                    FollowUpUpgradeBanner {
+                        showProUpgrade = true
+                    }
                 }
             }
         }
@@ -599,12 +636,11 @@ struct FollowUpChatView: View {
                 persistMessages()
             }
         }
+        refreshFollowUpGate()
         if case .fromQuestion(let preset) = entryMode {
             let text = preset.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                send(text)
-            }
+            send(text)
         }
     }
 
@@ -626,6 +662,11 @@ struct FollowUpChatView: View {
     private func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isReplying else { return }
+        refreshFollowUpGate()
+        guard permissionManager.canSendFollowUp(readingID: readingID) else {
+            followUpBlocked = true
+            return
+        }
         isInputFocused = false
         let history = messages
         messages.append(FollowUpChatMessage(role: .user, text: trimmed, time: Date()))
@@ -638,6 +679,8 @@ struct FollowUpChatView: View {
                     userMessage: trimmed
                 )
                 messages.append(FollowUpChatMessage(role: .coach, text: reply, time: Date()))
+                permissionManager.incrementFollowUp(readingID: readingID)
+                refreshFollowUpGate()
                 persistMessages()
             } catch {
                 if let last = messages.last, last.role == .user, last.text == trimmed {
@@ -650,10 +693,41 @@ struct FollowUpChatView: View {
         }
     }
 
+    private func refreshFollowUpGate() {
+        let turns = messages.filter { $0.role == .user }.count
+        permissionManager.adoptFollowUpCount(readingID: readingID, observedTurns: turns)
+        followUpIsPaidCap = permissionManager.followUpLimit(for: readingID) > SubscriptionConfig.freeFollowUpLimit
+        followUpBlocked = !permissionManager.canSendFollowUp(readingID: readingID) && turns > 0
+    }
+
+    private var activeRecord: DivinationRecord? {
+        attachedRecord ?? linkedRecord
+    }
+
     private func persistMessages() {
         guard messages.contains(where: { $0.role == .user }) else { return }
+        if activeRecord == nil, !permissionManager.canSaveMoreRecords() {
+            if !didWarnHistoryLimit {
+                didWarnHistoryLimit = true
+                showToast("免费版最多保存 3 条历史，这次追问还没写入。")
+            }
+            return
+        }
+        let hadRecord = activeRecord != nil
+        guard let record = dataService.ensureDivinationArchive(existing: activeRecord, draft: archiveDraft) else {
+            if !hadRecord {
+                showToast("这次没有写入历史记录，请再试一次。")
+            }
+            return
+        }
+        if !hadRecord {
+            attachedRecord = record
+            onArchiveCreated(record)
+        }
         if session == nil {
-            session = dataService.createFollowUpSession(for: linkedRecord)
+            session = dataService.createFollowUpSession(for: record)
+        } else if let session, session.divinationRecord == nil {
+            dataService.attach(session, to: record)
         }
         guard let session else { return }
         dataService.saveFollowUpMessages(messages, to: session)
@@ -691,6 +765,53 @@ struct FollowUpChatView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+private struct FollowUpUpgradeBanner: View {
+    var onUpgrade: () -> Void
+
+    var body: some View {
+        Button(action: onUpgrade) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("✨ 本次卦象还有更多维度可以深聊")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Color(red: 0.45, green: 0.28, blue: 0.05))
+                Text("开通会员，每卦 66次专业追问 →")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(red: 0.62, green: 0.40, blue: 0.08))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 1.0, green: 0.97, blue: 0.88),
+                                Color(red: 1.0, green: 0.93, blue: 0.78)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.93, green: 0.72, blue: 0.28),
+                                Color(red: 0.85, green: 0.55, blue: 0.15)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

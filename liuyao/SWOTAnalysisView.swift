@@ -19,7 +19,7 @@ struct SWOTAnalysisView: View {
     @State private var showResult = false
     @State private var aiAnalysis = ""
     @State private var isLoadingAI = false
-    @State private var showSubscriptionPrompt = false
+    @State private var showProUpgrade = false
     @State private var showLimitReached = false
     @State private var swotStartTime: Date?
     @ObservedObject private var aiStore = AIRequestStateStore.shared
@@ -72,11 +72,8 @@ struct SWOTAnalysisView: View {
         }
         .navigationTitle("SWOT分析")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showSubscriptionPrompt) {
-            SubscriptionPromptView(
-                isPresented: $showSubscriptionPrompt,
-                trigger: .swotLimitReached
-            )
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
         }
         .sheet(isPresented: $showLimitReached) {
             LimitReachedView(
@@ -189,7 +186,7 @@ struct SWOTAnalysisView: View {
                     Spacer()
                     
                     Button(action: {
-                        showSubscriptionPrompt = true
+                        showProUpgrade = true
                     }) {
                         Text("升级")
                             .font(.caption)
@@ -276,6 +273,10 @@ struct SWOTAnalysisView: View {
     }
     
     private func analyzeWithAI() {
+        guard permissionManager.canUseSWOT() else {
+            showLimitReached = true
+            return
+        }
         isLoadingAI = true
         showResult = true
         swotStartTime = Date()
@@ -307,9 +308,9 @@ struct SWOTAnalysisView: View {
                 
                 await MainActor.run {
                     aiAnalysis = result
+                    permissionManager.incrementSWOTCount()
                     isLoadingAI = false
                     aiStore.markSuccess(key: swotKey, result: result)
-                    permissionManager.incrementSWOTCount()
                     AnalyticsManager.shared.incrementSwotCount()
                     AnalyticsManager.shared.trackSwotSubmit()
                     let waitMs = Int(Date().timeIntervalSince(swotStartTime ?? Date()) * 1000)

@@ -5,6 +5,11 @@ import SwiftUI
 
 struct MasterReadingCheckoutView: View {
     var onClose: () -> Void
+    var onPurchased: (() -> Void)? = nil
+
+    @StateObject private var subscriptionService = SubscriptionService.shared
+    @State private var showProUpgrade = false
+    @State private var purchaseError: String?
 
     private let chapters = [
         "核心结论",
@@ -53,6 +58,7 @@ struct MasterReadingCheckoutView: View {
                             audienceCard
                             followUpCard
                             purchaseBar
+                            membershipLink
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, bottomSafeInset + 8)
@@ -76,6 +82,17 @@ struct MasterReadingCheckoutView: View {
             }
         }
         .ignoresSafeArea(edges: .bottom)
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
+        }
+        .alert("购买未完成", isPresented: Binding(
+            get: { purchaseError != nil },
+            set: { if !$0 { purchaseError = nil } }
+        )) {
+            Button("确定", role: .cancel) { purchaseError = nil }
+        } message: {
+            Text(purchaseError ?? "")
+        }
     }
 
     /// 弹层铺到屏幕底边后，GeometryReader 不再带底部安全区，改从窗口读取。
@@ -276,7 +293,7 @@ struct MasterReadingCheckoutView: View {
                 .font(.system(size: 30, weight: .bold))
                 .foregroundColor(buyColor)
             Button {
-                // 购买并绑定这一卦，后续再接
+                purchase()
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "cart.fill")
@@ -304,6 +321,33 @@ struct MasterReadingCheckoutView: View {
         }
         .padding(.horizontal, 4)
         .padding(.top, 2)
+    }
+
+    private var membershipLink: some View {
+        Button {
+            showProUpgrade = true
+        } label: {
+            Text("或开通会员，每月赠 1 次大师解读 →")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(buyColor)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func purchase() {
+        Task {
+            do {
+                let ok = try await subscriptionService.purchaseConsumable(SubscriptionConfig.master1ProductID)
+                if ok {
+                    onPurchased?()
+                } else if let message = subscriptionService.purchaseError, !message.isEmpty {
+                    purchaseError = message
+                }
+            } catch {
+                purchaseError = error.localizedDescription
+            }
+        }
     }
 
     private var cardBackground: some View {

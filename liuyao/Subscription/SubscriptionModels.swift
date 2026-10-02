@@ -37,6 +37,10 @@ enum SubscriptionTier: String, Codable {
     var isPro: Bool {
         return self == .proMonthly || self == .proYearly
     }
+
+    var isAnnual: Bool {
+        return self == .proYearly
+    }
     
     var price: String {
         switch self {
@@ -56,14 +60,14 @@ enum SubscriptionTier: String, Codable {
         case .proMonthly:
             return "¥9.9"
         case .proYearly:
-            return "¥8.25" // 99/12 = 8.25
+            return "¥8.25"
         }
     }
     
     var savingsText: String? {
         switch self {
         case .proYearly:
-            return "相当于免费送2个月"
+            return "立省¥19.8"
         default:
             return nil
         }
@@ -171,6 +175,9 @@ struct UsageQuota: Codable {
     let monthlyMatrixLimit: Int        // 每月决策矩阵次数（-1表示无限）
     let historyRecordsLimit: Int       // 历史记录保留数量（-1表示无限）
     let dailyFiveElementLimit: Int     // 每日五行决策次数（-1表示无限）
+    let monthlyReadingLimit: Int       // 每月专业解读次数（0 = 走每日限额，-1 = 无限）
+    let followUpLimit: Int             // 每卦追问上限
+    let monthlyMasterGift: Int         // 每月大师赠送次数
 
     var isUnlimited: Bool {
         return dailyDivinationLimit == -1 &&
@@ -188,16 +195,25 @@ struct UsageQuota: Codable {
         monthlyMatrixLimit    = try c.decode(Int.self, forKey: .monthlyMatrixLimit)
         historyRecordsLimit   = try c.decode(Int.self, forKey: .historyRecordsLimit)
         dailyFiveElementLimit = try c.decodeIfPresent(Int.self, forKey: .dailyFiveElementLimit) ?? 1
+        monthlyReadingLimit   = try c.decodeIfPresent(Int.self, forKey: .monthlyReadingLimit) ?? 0
+        followUpLimit         = try c.decodeIfPresent(Int.self, forKey: .followUpLimit) ?? 3
+        monthlyMasterGift     = try c.decodeIfPresent(Int.self, forKey: .monthlyMasterGift) ?? 0
     }
 
     init(dailyDivinationLimit: Int, monthlySWOTLimit: Int,
          monthlyMatrixLimit: Int, historyRecordsLimit: Int,
-         dailyFiveElementLimit: Int) {
+         dailyFiveElementLimit: Int,
+         monthlyReadingLimit: Int = 0,
+         followUpLimit: Int = 3,
+         monthlyMasterGift: Int = 0) {
         self.dailyDivinationLimit  = dailyDivinationLimit
         self.monthlySWOTLimit      = monthlySWOTLimit
         self.monthlyMatrixLimit    = monthlyMatrixLimit
         self.historyRecordsLimit   = historyRecordsLimit
         self.dailyFiveElementLimit = dailyFiveElementLimit
+        self.monthlyReadingLimit   = monthlyReadingLimit
+        self.followUpLimit         = followUpLimit
+        self.monthlyMasterGift     = monthlyMasterGift
     }
 
     static var free: UsageQuota {
@@ -206,7 +222,10 @@ struct UsageQuota: Codable {
             monthlySWOTLimit:      10,
             monthlyMatrixLimit:    10,
             historyRecordsLimit:   3,
-            dailyFiveElementLimit: 1    // 免费版每天 1 次五行决策
+            dailyFiveElementLimit: 1,
+            monthlyReadingLimit:   0,
+            followUpLimit:         3,
+            monthlyMasterGift:     0
         )
     }
 
@@ -216,7 +235,10 @@ struct UsageQuota: Codable {
             monthlySWOTLimit:      -1,
             monthlyMatrixLimit:    -1,
             historyRecordsLimit:   -1,
-            dailyFiveElementLimit: -1   // 专业版无限
+            dailyFiveElementLimit: -1,
+            monthlyReadingLimit:   66,
+            followUpLimit:         66,
+            monthlyMasterGift:     1
         )
     }
 }
@@ -229,6 +251,13 @@ struct UsageStatistics: Codable {
     var totalHistoryRecords: Int = 0
     var dailyFiveElementCount: Int = 0  // 每日五行决策使用次数
     var lifetimeSuccessfulDivinationCount: Int = 0
+    var monthlyReadingUsed: Int = 0
+    var masterCredits: Int = 0
+    var deductionCredits: Int = 0
+    var monthlyMasterGiftUsed: Int = 0
+    var followUpCountInCurrentReading: Int = 0
+    var currentReadingID: String = ""
+    var masterUnlockedReadingIDs: [String] = []
 
     var lastDailyResetDate: Date = Date()
     var lastMonthlyResetDate: Date = Date()
@@ -242,6 +271,13 @@ struct UsageStatistics: Codable {
         totalHistoryRecords   = try c.decodeIfPresent(Int.self,  forKey: .totalHistoryRecords)   ?? 0
         dailyFiveElementCount = try c.decodeIfPresent(Int.self,  forKey: .dailyFiveElementCount) ?? 0
         lifetimeSuccessfulDivinationCount = try c.decodeIfPresent(Int.self, forKey: .lifetimeSuccessfulDivinationCount) ?? 0
+        monthlyReadingUsed    = try c.decodeIfPresent(Int.self, forKey: .monthlyReadingUsed) ?? 0
+        masterCredits         = try c.decodeIfPresent(Int.self, forKey: .masterCredits) ?? 0
+        deductionCredits      = try c.decodeIfPresent(Int.self, forKey: .deductionCredits) ?? 0
+        monthlyMasterGiftUsed = try c.decodeIfPresent(Int.self, forKey: .monthlyMasterGiftUsed) ?? 0
+        followUpCountInCurrentReading = try c.decodeIfPresent(Int.self, forKey: .followUpCountInCurrentReading) ?? 0
+        currentReadingID      = try c.decodeIfPresent(String.self, forKey: .currentReadingID) ?? ""
+        masterUnlockedReadingIDs = try c.decodeIfPresent([String].self, forKey: .masterUnlockedReadingIDs) ?? []
         lastDailyResetDate    = try c.decodeIfPresent(Date.self, forKey: .lastDailyResetDate)    ?? Date()
         lastMonthlyResetDate  = try c.decodeIfPresent(Date.self, forKey: .lastMonthlyResetDate)  ?? Date()
     }
@@ -257,6 +293,8 @@ struct UsageStatistics: Codable {
     mutating func resetMonthly() {
         monthlySWOTCount   = 0
         monthlyMatrixCount = 0
+        monthlyReadingUsed = 0
+        monthlyMasterGiftUsed = 0
         lastMonthlyResetDate = Date()
     }
     
@@ -267,10 +305,20 @@ struct UsageStatistics: Codable {
     
     func needsMonthlyReset() -> Bool {
         let calendar = Calendar.current
-        let lastMonth = calendar.component(.month, from: lastMonthlyResetDate)
-        let currentMonth = calendar.component(.month, from: Date())
-        return lastMonth != currentMonth
+        let last = calendar.dateComponents([.year, .month], from: lastMonthlyResetDate)
+        let now = calendar.dateComponents([.year, .month], from: Date())
+        return last.year != now.year || last.month != now.month
     }
+}
+
+struct CloudQuotaSnapshot {
+    var masterCredits: Int
+    var deductionCredits: Int
+    var monthlyReadingUsed: Int
+    var monthlyMasterGiftUsed: Int
+    var monthlyResetDate: Date
+    var masterUnlockedReadingIDs: [String]
+    var lastUpdatedAt: Date = .distantPast
 }
 
 // MARK: - 功能权限类型
@@ -317,49 +365,6 @@ enum FeaturePermission {
         case .historyRecords:
             return "保存和查看历史分析记录"
         }
-    }
-}
-
-// MARK: - 订阅引导触发场景
-enum SubscriptionPromptTrigger {
-    case dailyLimitReached           // 每日问卦次数用完
-    case swotLimitReached            // SWOT次数用完
-    case matrixLimitReached          // 决策矩阵次数用完
-    case historyLimitReached         // 历史记录已满
-    case manualUpgrade               // 用户主动点击升级
-    
-    var title: String {
-        switch self {
-        case .dailyLimitReached:
-            return "今日分析次数已用完"
-        case .swotLimitReached:
-            return "本月SWOT分析次数已用完"
-        case .matrixLimitReached:
-            return "本月决策矩阵次数已用完"
-        case .historyLimitReached:
-            return "历史记录已达上限"
-        case .manualUpgrade:
-            return "升级专业版，解锁完整功能"
-        }
-    }
-    
-    var message: String {
-        switch self {
-        case .dailyLimitReached:
-            return "升级专业版，享受无限次AI摇卦分析"
-        case .swotLimitReached:
-            return "升级专业版，无限使用SWOT分析工具"
-        case .matrixLimitReached:
-            return "升级专业版，无限使用决策矩阵工具"
-        case .historyLimitReached:
-            return "升级专业版，无限保存历史记录"
-        case .manualUpgrade:
-            return "每天一杯咖啡的价格，换来清晰的人生方向"
-        }
-    }
-    
-    var actionText: String {
-        return "立即升级"
     }
 }
 

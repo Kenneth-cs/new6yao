@@ -136,7 +136,7 @@ struct UserInfoSection: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                     if devModeEnabled {
-                        Text("DEV")
+                        Text("开发")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 5).padding(.vertical, 2)
@@ -198,65 +198,81 @@ struct DeveloperModeSheet: View {
                 } header: {
                     Text("模式开关")
                 } footer: {
-                    Text("开启后头像变为橙色，顶栏显示 DEV 标识")
+                    Text("开启后头像变为橙色，顶栏显示开发标识")
                 }
 
-                // 使用次数调试
                 Section {
-                    // 当前状态
-                    statusRow("摇卦今日已用",
-                              value: "\(pm.usageStats.dailyDivinationCount) / \(pm.usageQuota.dailyDivinationLimit)",
-                              color: .purple)
-                    statusRow("五行决策今日已用",
-                              value: "\(pm.usageStats.dailyFiveElementCount) / \(pm.usageQuota.dailyFiveElementLimit)",
-                              color: .indigo)
-                    statusRow("SWOT 本月已用",
-                              value: "\(pm.usageStats.monthlySWOTCount) / \(pm.usageQuota.monthlySWOTLimit)",
-                              color: .blue)
-                    statusRow("矩阵本月已用",
-                              value: "\(pm.usageStats.monthlyMatrixCount) / \(pm.usageQuota.monthlyMatrixLimit)",
-                              color: .green)
+                    statusRow("当前身份", value: pm.currentTier.displayName, color: .orange)
+                    statusRow("专业解读剩余", value: professionalRemainingText, color: .purple)
+                    statusRow("大师赠送剩余", value: "\(pm.monthlyMasterGiftRemaining()) 次", color: .yellow)
+                    statusRow("已购大师", value: "\(pm.usageStats.masterCredits) 次", color: .yellow)
+                    statusRow("已购推演", value: "\(pm.usageStats.deductionCredits) 次", color: .blue)
                 } header: {
-                    Text("当前使用量")
+                    Text("当前额度")
+                } footer: {
+                    Text("「恢复额度」会把已用次数清零，之后可以继续解读，不会拦截。要测拦截，用下面的「用尽」。")
                 }
 
-                // 操作按钮
                 Section {
                     Button {
-                        pm.devResetAllCounts()
-                        showToast("✅ 已重置所有计数")
+                        pm.devRestoreMonthlyQuota()
+                        showToast("已恢复本月额度，专业模式可以继续解读")
                     } label: {
-                        Label("重置所有次数（归零）", systemImage: "arrow.counterclockwise.circle.fill")
+                        Label("恢复本月额度", systemImage: "arrow.counterclockwise.circle.fill")
                             .foregroundColor(.green)
                     }
 
                     Button {
-                        pm.devFillAllCounts()
-                        showToast("⚠️ 已用尽所有次数")
+                        pm.devExhaustProfessionalReading()
+                        showToast("专业解读已用尽。再选专业模式会被拦截")
                     } label: {
-                        Label("填满次数（模拟用尽）", systemImage: "exclamationmark.circle.fill")
+                        Label("用尽专业解读", systemImage: "exclamationmark.circle.fill")
                             .foregroundColor(.orange)
                     }
 
                     Button {
-                        pm.simulateUpgradeToPro()
-                        showToast("🎉 已切换为专业版")
+                        pm.devClearMasterAccess()
+                        showToast("大师赠送和已购大师已清空")
                     } label: {
-                        Label("模拟专业版", systemImage: "crown.fill")
+                        Label("清空大师次数", systemImage: "person.crop.circle.badge.xmark")
+                            .foregroundColor(.orange)
+                    }
+
+                    Button {
+                        pm.devClearDeductionCredits()
+                        showToast("已购推演已清空")
+                    } label: {
+                        Label("清空推演次数", systemImage: "chart.bar.fill")
+                            .foregroundColor(.blue)
+                    }
+
+                    Button {
+                        pm.devExhaustPaywall()
+                        showToast("专业、大师、推演都已用尽")
+                    } label: {
+                        Label("全部用尽", systemImage: "xmark.octagon.fill")
+                            .foregroundColor(.red)
+                    }
+
+                    Button {
+                        pm.simulateUpgradeToPro()
+                        showToast("已切换为月会员。商店有真实订阅时，下次刷新会盖回去")
+                    } label: {
+                        Label("模拟月会员", systemImage: "crown.fill")
                             .foregroundColor(.yellow)
                     }
 
                     Button {
                         pm.simulateDowngradeToFree()
-                        showToast("⬇️ 已切换为免费版")
+                        showToast("已切换为免费版。商店有真实订阅时，下次刷新会盖回去")
                     } label: {
                         Label("模拟免费版", systemImage: "person.fill")
                             .foregroundColor(.gray)
                     }
                 } header: {
-                    Text("调试操作")
+                    Text("测试操作")
                 } footer: {
-                    Text("以上操作仅修改本地缓存，不影响真实订阅状态")
+                    Text("这些按钮会改本地额度并回写 iCloud。模拟身份不会取消 App Store 里的真实订阅。")
                 }
             }
             .navigationTitle("🔧 开发者模式")
@@ -279,6 +295,17 @@ struct DeveloperModeSheet: View {
             }
             .animation(.easeInOut(duration: 0.3), value: toast)
         }
+    }
+
+    private var professionalRemainingText: String {
+        if pm.currentTier.isPro {
+            let limit = pm.usageQuota.monthlyReadingLimit
+            let left = pm.monthlyReadingRemaining()
+            return "\(left) / \(limit) 次"
+        }
+        let left = pm.getDailyDivinationRemaining()
+        if left < 0 { return "不限" }
+        return "今日 \(left) 次"
     }
 
     private func statusRow(_ title: String, value: String, color: Color) -> some View {
@@ -482,7 +509,7 @@ struct RecentDecisionsSection: View {
                         MatrixHistoryRow(record: record)
                     }
                 case .divination(let record):
-                    NavigationLink(destination: HistoryDetailView(record: record)) {
+                    NavigationLink(destination: DivinationArchiveView(record: record)) {
                         DivinationHistoryRow(record: record)
                     }
                     .buttonStyle(PlainButtonStyle())

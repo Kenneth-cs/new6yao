@@ -189,11 +189,12 @@
 				};
 			};
 			buildConfigurationList = 5C63E06F2E5C0ADC003E81DE /* Build configuration list for PBXProject "人生教练" */;
-			developmentRegion = en;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
+				"zh-Hans",
 				Base,
+				en,
 			);
 			mainGroup = 5C63E06B2E5C0ADC003E81DE;
 			minimizedProjectReferenceProxies = 1;
@@ -408,19 +409,20 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于语音追问，录制您的提问内容";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "liuyao.app 需要访问您的相册，以便保存海报";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "人生教练需要访问您的相册，以便保存海报";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于语音追问，将您的问题转换为文字发送给追问教练";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.8.4;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Dream-making.LifeCoach";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -446,19 +448,20 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "人生教练";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "人生教练需要获取您的位置信息，以便提供基于时空的决策分析参考";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于语音追问，录制您的提问内容";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "liuyao.app 需要访问您的相册，以便保存海报";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "人生教练需要访问您的相册，以便保存海报";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于语音追问，将您的问题转换为文字发送给追问教练";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.8.4;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Dream-making.LifeCoach";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

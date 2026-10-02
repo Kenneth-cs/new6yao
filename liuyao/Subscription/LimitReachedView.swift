@@ -13,7 +13,10 @@ struct LimitReachedView: View {
     let resetTime: Date?
     
     @Environment(\.dismiss) private var dismiss
-    @State private var showSubscriptionDetail = false
+    @StateObject private var permissionManager = PermissionManager.shared
+    @State private var showProUpgrade = false
+    @State private var prefersYearlyUpgrade = true
+    @State private var showMasterCheckout = false
     @State private var selectedTier: SubscriptionTier = .proYearly  // 默认选择年付
     
     enum LimitType {
@@ -21,17 +24,23 @@ struct LimitReachedView: View {
         case monthlySWOT
         case monthlyMatrix
         case historyRecords
+        case monthlyReadingMonthly
+        case monthlyReadingAnnual
         
         var title: String {
             switch self {
             case .dailyDivination:
-                return "今日分析次数已用完"
+                return "今日解读次数已用完"
             case .monthlySWOT:
                 return "本月SWOT分析次数已用完"
             case .monthlyMatrix:
                 return "本月决策矩阵次数已用完"
             case .historyRecords:
                 return "历史记录已达上限"
+            case .monthlyReadingMonthly:
+                return "本月专业解读已用完（66/66次）"
+            case .monthlyReadingAnnual:
+                return "本月专业解读已用完（88/88次）"
             }
         }
         
@@ -45,63 +54,48 @@ struct LimitReachedView: View {
                 return "tablecells"
             case .historyRecords:
                 return "folder.badge.plus"
+            case .monthlyReadingMonthly, .monthlyReadingAnnual:
+                return "chart.bar.fill"
             }
         }
         
         var message: String {
             switch self {
             case .dailyDivination:
-                return "免费版用户每天可获得 1 次专业分析"
+                return "开通会员，每月 66次专业解读\n不受每日次数限制，随时起卦"
             case .monthlySWOT:
                 return "免费版用户每月可以使用10次SWOT分析"
             case .monthlyMatrix:
                 return "免费版用户每月可以使用10次决策矩阵"
             case .historyRecords:
                 return "免费版用户最多保留3条历史记录"
+            case .monthlyReadingMonthly:
+                return "升级年会员，每月享 88次专业解读"
+            case .monthlyReadingAnnual:
+                return "如急需解读，可购买大师解读点券（每次含专业解读）"
             }
         }
     }
     
+    private var usesCompactSheet: Bool {
+        switch limitType {
+        case .dailyDivination, .monthlyReadingMonthly, .monthlyReadingAnnual:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // 顶部插图
-                topIllustration
-                
-                // 内容区域
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // 标题和描述
-                        titleSection
-                        
-                        // 重置时间提示
-                        if let resetTime = resetTime {
-                            resetTimeSection(resetTime: resetTime)
-                        }
-                        
-                        // 升级专业版卖点
-                        upgradeFeatures
-                        
-                        // 价格展示
-                        pricingSection
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-                }
-                
-                // 底部按钮
-                bottomButtons
-            }
-            .navigationTitle("使用限制")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                }
+        Group {
+            if usesCompactSheet {
+                compactSheet
+            } else {
+                fullPage
             }
         }
+        .presentationDetents(usesCompactSheet ? [.fraction(0.68), .large] : [.large])
+        .presentationDragIndicator(usesCompactSheet ? .visible : .hidden)
         .onAppear {
             let source: String
             switch limitType {
@@ -109,26 +103,89 @@ struct LimitReachedView: View {
             case .monthlySWOT: source = "SWOT"
             case .monthlyMatrix: source = "矩阵"
             case .historyRecords: source = "历史记录"
+            case .monthlyReadingMonthly: source = "月会员配额"
+            case .monthlyReadingAnnual: source = "年会员配额"
             }
             AnalyticsManager.shared.trackLimitReachedShow(triggerSource: source)
         }
-        .fullScreenCover(isPresented: $showSubscriptionDetail) {
-            NavigationStack {
-                SubscriptionDetailView(initialSelectedTier: selectedTier)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("关闭") {
-                                showSubscriptionDetail = false
-                                dismiss()
-                            }
-                        }
-                    }
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView(prefersYearly: prefersYearlyUpgrade, onPurchased: leaveAfterPurchase)
+        }
+        .overlay {
+            if showMasterCheckout {
+                MasterReadingCheckoutView(onClose: {
+                    showMasterCheckout = false
+                }, onPurchased: {
+                    showMasterCheckout = false
+                    leaveAfterPurchase()
+                })
             }
         }
     }
     
-    // MARK: - 顶部插图
-    
+    private func leaveAfterPurchase() {
+        ToastManager.shared.showPurchaseSuccess {
+            dismiss()
+        }
+    }
+
+    private var compactSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(limitType.title)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(limitType.message)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if limitType == .monthlyReadingMonthly || limitType == .monthlyReadingAnnual {
+                Text("还有 \(permissionManager.daysUntilMonthlyReset()) 天后重置")
+                    .font(.subheadline)
+                    .foregroundColor(.orange)
+            }
+            bottomButtons
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(UIColor.systemBackground))
+    }
+
+    private var fullPage: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                topIllustration
+                ScrollView {
+                    VStack(spacing: 24) {
+                        titleSection
+                        if let resetTime = resetTime {
+                            resetTimeSection(resetTime: resetTime)
+                        }
+                        if showsLegacyUpgradePitch {
+                            upgradeFeatures
+                            if limitType != .historyRecords {
+                                pricingSection
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
+                }
+                bottomButtons
+            }
+            .navigationTitle("使用限制")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+    }
+
     private var topIllustration: some View {
         ZStack {
             // 背景渐变
@@ -168,6 +225,12 @@ struct LimitReachedView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
+            if limitType == .monthlyReadingMonthly || limitType == .monthlyReadingAnnual {
+                Text("还有 \(permissionManager.daysUntilMonthlyReset()) 天后重置")
+                    .font(.subheadline)
+                    .foregroundColor(.orange)
+            }
+
             if let remaining = remaining, remaining > 0 {
                 HStack {
                     Image(systemName: "info.circle.fill")
@@ -217,7 +280,7 @@ struct LimitReachedView: View {
                 .fontWeight(.bold)
             
             VStack(alignment: .leading, spacing: 12) {
-                featureItem("无限次AI摇卦分析", icon: "sparkles", color: .purple)
+                featureItem("每月 66次专业解读，年会员 88次", icon: "sparkles", color: .purple)
                 featureItem("无限使用思维工具", icon: "square.grid.2x2", color: .blue)
                 featureItem("无限保存历史记录", icon: "clock.arrow.circlepath", color: .green)
             }
@@ -316,30 +379,39 @@ struct LimitReachedView: View {
     
     private var bottomButtons: some View {
         VStack(spacing: 12) {
-            // 主按钮 - 立即升级
-            Button(action: {
-                showSubscriptionDetail = true
-            }) {
-                Text("立即升级专业版")
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.purple, Color.blue]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-            
-            // 次要按钮 - 返回
-            Button(action: {
-                dismiss()
-            }) {
-                Text("暂不升级")
+            switch limitType {
+            case .dailyDivination:
+                limitActionButton("去升级") {
+                    prefersYearlyUpgrade = true
+                    showProUpgrade = true
+                }
+            case .monthlyReadingMonthly:
+                limitActionButton("立即升级年会员 ¥99/年") {
+                    prefersYearlyUpgrade = true
+                    showProUpgrade = true
+                }
+                Button("等待重置") { dismiss() }
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            case .monthlyReadingAnnual:
+                limitActionButton("购买大师解读 ¥12") {
+                    showMasterCheckout = true
+                }
+                Button("等待重置") { dismiss() }
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            case .historyRecords:
+                limitActionButton("点击了解更多") {
+                    showProUpgrade = true
+                }
+                Button("暂不升级") { dismiss() }
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            default:
+                limitActionButton("立即升级专业版") {
+                    showProUpgrade = true
+                }
+                Button("暂不升级") { dismiss() }
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -352,6 +424,33 @@ struct LimitReachedView: View {
     
     // MARK: - 辅助视图
     
+    private var showsLegacyUpgradePitch: Bool {
+        switch limitType {
+        case .dailyDivination, .monthlyReadingMonthly, .monthlyReadingAnnual:
+            return false
+        default:
+            return true
+        }
+    }
+
+    private func limitActionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.purple, Color.blue]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .foregroundColor(.white)
+                .cornerRadius(12)
+        }
+    }
+
     private func featureItem(_ text: String, icon: String, color: Color) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -380,6 +479,8 @@ struct LimitReachedView: View {
         switch limitType {
         case .dailyDivination:
             return "明天凌晨重置"
+        case .monthlyReadingMonthly, .monthlyReadingAnnual:
+            return "还有 \(permissionManager.daysUntilMonthlyReset()) 天后自动重置"
         case .monthlySWOT, .monthlyMatrix:
             let calendar = Calendar.current
             if let nextMonth = calendar.date(byAdding: .month, value: 1, to: Date()),

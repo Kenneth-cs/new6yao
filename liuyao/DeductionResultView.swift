@@ -5,16 +5,21 @@ struct DeductionResultView: View {
     let hexagramName: String
     let displayQuestion: String
     var sourceRecord: DivinationRecord? = nil
+    var archiveDraft: DivinationArchiveDraft? = nil
+    var onArchiveCreated: (DivinationRecord) -> Void = { _ in }
     let onDismiss: () -> Void
     let onEditBackground: () -> Void
     
     @State private var expandedPathIds: Set<String> = []
+    @State private var linkedRecord: DivinationRecord?
+    @State private var showOverwriteConfirm = false
     @State private var showSaveAlert = false
     @State private var saveAlertTitle = "保存成功"
     @State private var saveAlertMessage = ""
     @State private var showFullBasis = false
     @State private var basisPathId: String?
     @State private var showShareExport = false
+    @State private var showHistoryLimit = false
     @State private var shareActionTaken: ShareActionTaken = .none
     
     private static let disclaimerText = "本推演基于本次卦象与已知背景，仅供参考，不代表确定结果。"
@@ -68,10 +73,28 @@ struct DeductionResultView: View {
                 bottomBar
             }
         }
+        .onAppear {
+            if linkedRecord == nil {
+                linkedRecord = sourceRecord
+            }
+        }
+        .alert("已有推演", isPresented: $showOverwriteConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("替换") { commitDeductionSave() }
+        } message: {
+            Text("已有推演，保存将替换为本次结果。")
+        }
         .alert(saveAlertTitle, isPresented: $showSaveAlert) {
             Button("确定", role: .cancel) {}
         } message: {
             Text(saveAlertMessage)
+        }
+        .sheet(isPresented: $showHistoryLimit) {
+            LimitReachedView(
+                limitType: .historyRecords,
+                remaining: 0,
+                resetTime: nil
+            )
         }
         .sheet(isPresented: $showFullBasis) {
             fullBasisSheet
@@ -135,16 +158,10 @@ struct DeductionResultView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ZStack(alignment: .trailing) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(ResultTheme.softStrong)
-                DeductionMountains()
-                    .frame(width: 120, height: 72)
-                    .padding(.trailing, 4)
-                    .allowsHitTesting(false)
-            }
-        )
+        .background {
+            ResultQuestionBannerBackground()
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
     
     // MARK: - Recommendation
@@ -515,16 +532,42 @@ struct DeductionResultView: View {
         }
     }
     
+    private var archiveRecord: DivinationRecord? {
+        linkedRecord ?? sourceRecord
+    }
+
     private func saveReport() {
-        guard let sourceRecord else {
-            saveAlertTitle = "还不能保存"
-            saveAlertMessage = "请先在解卦结果页保存本次记录，再保存推演。"
+        if archiveRecord?.deductionReport != nil {
+            showOverwriteConfirm = true
+            return
+        }
+        commitDeductionSave()
+    }
+
+    private func commitDeductionSave() {
+        if archiveRecord == nil, !PermissionManager.shared.canSaveMoreRecords() {
+            showHistoryLimit = true
+            return
+        }
+        let hadRecord = archiveRecord != nil
+        guard let record = DataService().ensureDivinationArchive(existing: archiveRecord, draft: archiveDraft) else {
+            saveAlertTitle = "保存失败"
+            saveAlertMessage = "这次没有写入记录，请再试一次。"
             showSaveAlert = true
             return
         }
-        let saved = DataService().saveDeductionReport(report, for: sourceRecord)
-        saveAlertTitle = saved ? "保存成功" : "保存失败"
-        saveAlertMessage = saved ? "本次三路推演已保存。" : "这次没有写入记录，请再试一次。"
+        let saved = DataService().saveDeductionReport(report, for: record)
+        if saved {
+            linkedRecord = record
+            onArchiveCreated(record)
+            saveAlertTitle = "保存成功"
+            saveAlertMessage = hadRecord
+                ? "本次三路推演已保存。"
+                : "问题和解读已一并保存，本次推演已写入历史记录。"
+        } else {
+            saveAlertTitle = "保存失败"
+            saveAlertMessage = "这次没有写入记录，请再试一次。"
+        }
         showSaveAlert = true
     }
 }

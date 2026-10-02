@@ -13,7 +13,7 @@ struct SubscriptionManagementView: View {
     @StateObject private var permissionManager = PermissionManager.shared
     @Environment(\.dismiss) private var dismiss
     
-    @State private var showSubscriptionDetail = false
+    @State private var showProUpgrade = false
     @State private var showingManageSubscription = false
     
     var body: some View {
@@ -37,17 +37,8 @@ struct SubscriptionManagementView: View {
         }
         .navigationTitle("订阅管理")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showSubscriptionDetail) {
-            NavigationStack {
-                SubscriptionDetailView()
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("关闭") {
-                                showSubscriptionDetail = false
-                            }
-                        }
-                    }
-            }
+        .sheet(isPresented: $showProUpgrade) {
+            ProUpgradeView()
         }
         .onAppear {
             Task {
@@ -182,7 +173,7 @@ struct SubscriptionManagementView: View {
     private var upgradeSection: some View {
         Section {
             Button(action: {
-                showSubscriptionDetail = true
+                showProUpgrade = true
             }) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {

@@ -135,8 +135,16 @@ class ToastManager: ObservableObject {
         }
     }
     
-    func showSuccess(_ message: String) {
-        show(message, type: .success)
+    func showSuccess(_ message: String, duration: TimeInterval = 2.0) {
+        show(message, type: .success, duration: duration)
+    }
+
+    /// 先关掉购买页，再在回到的页面上提示。
+    func showPurchaseSuccess(after action: @escaping () -> Void) {
+        action()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            self.showSuccess("购买成功，请继续操作～", duration: 2.6)
+        }
     }
     
     func showError(_ message: String) {
